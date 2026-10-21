@@ -39,6 +39,19 @@ mesma hora, tiles Pedidos/Unidades/Ticket/Última venda, e barras por hora Passa
 - Erro do sync vem DENTRO de um 200 por loja (`erroDoSync`): a tela diz e segue mostrando o espelho.
 - `dispararSync` (`magaluDb.js`) é a chamada única ao `magalu-sync`, usada também em Configurações.
 
+## Anúncios no formato do Gestor ML (24/10/2026)
+`/anuncios`: faixa de resumo, abas Todos/Ativos/Com custo/Sem custo/Não publicados (sub-filtros
+em Ativos), busca por título/SKU/marca, ordenação, visão Grade ou Famílias (`payload.group.id`),
+e card com fotos, status, Full, vendidos 30d, preço com desconto, estoque e **margem por
+unidade no preço atual** (`margemUnitaria` → `calcularMargem`, a regra única).
+- Comissão: taxa REAL das vendas de 30 dias do SKU (comissão ÷ receita, só com todos os itens
+  completos); sem ela, o % configurado em Impostos. Ads da Magalu não integrado ("não integrado").
+- Sem custo cadastrado a margem é indisponível e o card pede o cadastro (em `/produtos`).
+  Sem papel financeiro/admin o bloco diz que o acesso não inclui custos.
+- O hook lê só os campos do payload que o card usa (alias no select): o payload inteiro
+  passa de 5 MB numa loja de 2.300 SKUs.
+- "Sincronizar com a Magalu" roda o `magalu-sync` `kind: skus`; rodada cortada pelo tempo é PARCIAL.
+
 ## Regras que valem aqui (as mesmas do Gestor ML)
 - **Arquitetura de 3 camadas:** página fina (`src/pages`) → `src/features/<x>/` (constantes,
   mapper puro com teste, hook único de fetch) → componentes burros (`src/components/<x>/`).
