@@ -20,8 +20,9 @@ Telas que só dependem de pedidos e catálogo: **Vendas Hoje**, **Tarefas**, **P
 - Migration `20261022120000_magalu_gestao.sql`: `sku_costs`, `account_settings`, `tasks`.
 - Regras únicas em `src/features/magalu/`: `itens.js` (itens do pedido e agregação por SKU),
   `margem.js` (`calcularMargem` e `curvaAbc`, régua 80/95 da suíte), `useGestaoConfig.js`.
-- **A API não devolve comissão nem frete do pedido**: entram como % informado em Impostos.
-  Sem custo, comissão ou imposto, a margem é INDISPONÍVEL (com o motivo), nunca zero.
+- **Comissão vem da Magalu** em cada item do pedido; o % de Impostos só cobre item sem ela.
+  Frete fica como % informado. Sem custo, comissão ou imposto, a margem é INDISPONÍVEL
+  (com o motivo), nunca zero.
 - A receita das telas por SKU soma os ITENS; a de Pedidos/Dashboard soma o total do pedido.
   Podem divergir se o pedido tiver frete/desconto fora dos itens.
 - Ainda não feito (depende da API conferida): Campanhas/Ads, Promoções, Perguntas,
@@ -53,48 +54,51 @@ Telas que só dependem de pedidos e catálogo: **Vendas Hoje**, **Tarefas**, **P
 - Função nova = 3 lugares: a pasta, `scripts/functions-list.txt` e `supabase/config.toml`
   (`npm test` confere).
 
-## API da Magalu: o que está confirmado e o que não está
-`developers.magalu.com` fica bloqueado na rede do ambiente. Em 21/10/2026 o dono enviou um
-resumo da doc oficial (índice das 27 especificações, conceitos e padrões). O resumo NÃO traz
-os modelos de dados: nomes de campo seguem sem conferência.
+## API da Magalu: conferida nas specs oficiais (21/10/2026)
+As 27 specs ficam em `developers.magalu.com/apis/<nome>.openapi.yaml` (índice em
+`/apis/index.json`, resumo para agentes em `/llms.txt`). Leia a spec antes de mexer num campo.
 
-**Confirmado na doc:**
-- login em `id.magalu.com/login` com `choose_tenants=true` e `state`; code de uso único,
-  10 min; troca e refresh em `POST id.magalu.com/oauth/token`; respeitar `expires_in`;
-- base `https://api.magalu.com`. Perguntas, conversas e inventário de fulfillment ficam em
-  `https://services.magalu.com`; Ads, promoções e financeiro em `api.magalu.com`;
-- rotas usadas hoje existem: `GET /seller/v1/portfolios/skus` e `GET /seller/v1/orders`.
-  Preço e estoque são POR SKU: `GET /seller/v1/portfolios/prices/{sku}` e `.../stocks/{sku}`;
-- paginação `_limit` + `_offset` (limite varia por rota), ou cursor (`_paginate=cursor` e
-  seguir `meta.links.next`, sem misturar com offset); ordenação `_sort=campo:asc|desc`;
-  filtros `campo__gte`, `__lte`, `__in`, `__like`, só os aceitos pela rota;
-- dinheiro = `value`/`amount` ÷ `normalizer`, sem presumir 100 (o mapper já faz assim);
-- 429 é limite por seller e módulo; 202 é processamento pendente;
-- escopos: SKU/preço/estoque `open:portfolio-{skus,prices,stocks}-seller:read`, pedidos
-  `open:order-order-seller:read`, entregas `open:order-delivery-seller:read`, NF-e
-  `open:order-invoice-seller:read`, perguntas `services:questions-seller:read`, conversas
-  `services:conversations-seller:read`. Ads, promoções e financeiro: escopo não listado no
-  resumo. Pedir escopo que o app não tem habilitado pode derrubar o login: só acrescentar
-  junto da tela que o usa;
-- financeiro: CREDIT soma, DEBIT subtrai, INFORMATIVE fica fora; não deduzir de novo o
-  `ABSOLUTE_DISCOUNT` já aplicado ao preço; a análise por pedido exige `order_id` ou um par
-  de datas, janela máxima de 15 dias.
+**Login (`magalu-oauth`, `_shared/magalu-api.ts`):**
+- troca do code em `POST id.magalu.com/oauth/token` em **JSON**; renovação no mesmo endpoint
+  em **`application/x-www-form-urlencoded`**; token de ~7200 s, refresh novo a cada renovação;
+- a resposta do token NÃO traz a loja: ela vem de **`GET /seller/v1/portfolios/me`**
+  (`tenant.id` = `account_id`, `seller.name` = nome). Claims do JWT são só plano B.
 
-**Relatado por integradores, não está na doc:**
-- teto de 5.000 no offset (o sync para como PARCIAL e diz por quê). O cursor da doc deve
-  resolver isso: trocar depois de ver a resposta real;
-- a loja vem na claim `tenant` do access token; sem tenant a conexão é recusada.
+**Pedidos (`GET /seller/v1/orders`):**
+- chave `id` (UUID); `code` é o número que o comprador vê (a tela mostra o `code`);
+- status do pedido: `new` (pagamento não aprovado, NÃO é venda), `approved`, `cancelled`,
+  `finished` (pode ter entrega cancelada). Entrega tem status próprio (`new`, `approved`,
+  `invoiced`, `shipped`, `delivered`, `cancelled`, `frozen`);
+- valores são INTEIROS com `normalizer` ao lado: `amounts.total / amounts.normalizer`.
+  Objeto sem normalizer é ilegível (null), nunca se presume 100;
+- itens em `deliveries[].items[]`: `info.sku`, `info.name`, `quantity`,
+  `unit_price {value, normalizer}`, `amounts.total`, **`amounts.commission`** (comissão real);
+- receita do item = `unit_price × quantity`; entrega `cancelled` fica fora da receita, e o
+  `total_amount` do pedido soma só as entregas ativas;
+- a margem usa a comissão que a Magalu informa por item. O % de Impostos só entra num SKU em
+  que algum item veio sem comissão;
+- filtros `updated_at__gte` (o sync usa: pega pedido novo e mudança de status) e
+  `purchased_at__gte`; `_sort` só aceita `purchased_at:asc|desc`.
 
-**Ainda aberto (precisa da spec YAML ou de uma resposta real):**
-- campos de pedido, item e SKU, e os status. O sync pressupõe a lista de pedidos em ordem
-  decrescente; dá para pedir `_sort`, mas só com o nome do campo de data certo;
-- se a lista de SKUs traz preço e estoque; se não, a tela mostra "não informado". Os mappers
-  guardam o payload cru, então corrigir o mapeamento não exige buscar de novo.
+**Produtos (`GET /seller/v1/portfolios/skus`, máx. 100 por página):**
+- campos `sku`, `title`, `status` (`PUBLISHED`, `UNPUBLISHED`, `BLOCKED`, `UNDER_REVIEW`,
+  `DELETING`, `DELETED`), `images[].reference`. A lista NÃO traz preço nem estoque;
+- preço em `GET /prices/{sku}` (por canal: `price`, `list_price`, `normalizer`) e estoque em
+  `GET /stocks/{sku}` (por canal e CD; soma só `type=AVAILABLE`, `RESERVED` não é vendável).
+  Canal Magalu de produção: `9fe0d853-732b-4e4a-a0b0-cff988ed043d`;
+- o sync grava preço/estoque à parte e só o que foi lido: nunca apaga um valor conhecido com
+  null. SKU sem leitura deixa a rodada PARCIAL e diz quantos.
 
-**Telas que dependem da API (rotas confirmadas, campos não):** Campanhas (`/seller/v1/ads/...`),
-Promoções (`/seller/v1/promotions`), Perguntas (`services.magalu.com/v0/questions`),
-Devoluções/Reclamações (SAC: `/seller/v0/tickets`, `.../returns`), Recebíveis
-(`/seller/v1/financial-analysis/...`), Estoque fulfillment (`services.magalu.com/logistics/v1/inventories`).
+**Padrões gerais:** paginação `_limit` + `_offset` (a API pode devolver menos que o pedido:
+vale `meta.page.limit`) ou cursor (`_paginate=cursor`, `meta.links.next`); 429 é limite por
+seller e módulo; teto de 5.000 no offset relatado por integradores (o sync para como PARCIAL).
+
+**Telas que faltam e as specs delas:** Campanhas (`campaign.ads`, `metric.ads`,
+`financial.ads`), Promoções (`promotions`), Perguntas (`questions`, em `services.magalu.com`),
+Devoluções/Reclamações (`sac.yaml`), Recebíveis (`financial-analysis`: CREDIT soma, DEBIT
+subtrai, INFORMATIVE fora, janela máx. 15 dias), Estoque fulfillment (`stock`). Cada uma pede
+escopo próprio: só acrescentar o escopo junto da tela, porque escopo não habilitado no app
+pode derrubar o login.
 
 ## Comandos
 `npm run dev` · `npm run build` · `npm test` (lista de functions + vitest) ·
