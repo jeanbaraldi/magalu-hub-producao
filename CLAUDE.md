@@ -28,6 +28,17 @@ Telas que só dependem de pedidos e catálogo: **Vendas Hoje**, **Tarefas**, **P
 - Ainda não feito (depende da API conferida): Campanhas/Ads, Promoções, Perguntas,
   Devoluções, Reclamações, Recebíveis, Estoque Full.
 
+## Vendas Hoje "ao vivo" (24/10/2026)
+Mesmo formato do Ao vivo da Shopee: cabeçalho azul com receita do dia, variação vs ontem até a
+mesma hora, tiles Pedidos/Unidades/Ticket/Última venda, e barras por hora Passado/Agora/Futuro.
+- **Ao vivo de verdade:** com a tela aberta, `useVendasHojeData` chama o `magalu-sync`
+  (`kind: orders`, `days: 1`) ao abrir e a cada 2 min (o cron só roda a cada 30 min); o botão
+  Atualizar força a busca. Throttle por loja em memória do módulo, sem sobrepor buscas.
+- **Realtime** em `magalu.orders` (migration `20261024120000`): pedido gravado pelo sync repinta
+  em ~1,5 s. A releitura do espelho a cada 30 s é a rede de segurança se a publicação faltar.
+- Erro do sync vem DENTRO de um 200 por loja (`erroDoSync`): a tela diz e segue mostrando o espelho.
+- `dispararSync` (`magaluDb.js`) é a chamada única ao `magalu-sync`, usada também em Configurações.
+
 ## Regras que valem aqui (as mesmas do Gestor ML)
 - **Arquitetura de 3 camadas:** página fina (`src/pages`) → `src/features/<x>/` (constantes,
   mapper puro com teste, hook único de fetch) → componentes burros (`src/components/<x>/`).

@@ -113,6 +113,7 @@ export function mapVendasHoje(pedidos, agora = new Date()) {
       hora,
       rotulo: `${String(hora).padStart(2, '0')}h`,
       futuro,
+      estado: futuro ? 'futuro' : hora === horaAgora ? 'agora' : 'passado',
       // Hora futura não tem venda ainda: null (barra apagada), nunca zero.
       receita: futuro ? null : (lh.length === 0 ? 0 : rh.total),
       pedidos: futuro ? null : lh.length,
@@ -141,9 +142,16 @@ export function mapVendasHoje(pedidos, agora = new Date()) {
     // Nenhum item com valor legível: receita desconhecida, não R$ 0.
     .map((l) => ({ ...l, receita: l.itensSemValor > 0 && l.receita === 0 ? null : l.receita }))
 
+  // Última VENDA de hoje (cancelado e pagamento não aprovado não contam).
+  let ultimaVenda = null
+  for (const p of vendasHoje) {
+    if (ultimaVenda == null || ms(p.purchased_at) > ms(ultimaVenda)) ultimaVenda = p.purchased_at
+  }
+
   return {
     kpis: {
       ...atual,
+      ultimaVenda,
       cancelados: hoje.filter((p) => pedidoCancelado(p.status)).length,
       variacao: {
         receita: variacao(atual.receita, antes.receita),
@@ -160,4 +168,14 @@ export function mapVendasHoje(pedidos, agora = new Date()) {
     rankingSemSku: semSku,
     totalHoje: hoje.length,
   }
+}
+
+/** Erro que o magalu-sync devolve DENTRO de um 200 (uma loja falha sem derrubar as outras). */
+export function erroDoSync(corpo, contaId) {
+  const conta = corpo?.accounts?.find((a) => String(a.account_id) === String(contaId))
+  if (!conta) return null
+  if (conta.error) return String(conta.error)
+  if (conta.skipped) return `sincronização pulada (${conta.skipped})`
+  if (conta.orders?.error) return String(conta.orders.error)
+  return null
 }
