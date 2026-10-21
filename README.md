@@ -54,33 +54,47 @@ Telas que só dependem de pedidos e catálogo: **Vendas Hoje**, **Tarefas**, **P
   (`npm test` confere).
 
 ## API da Magalu: o que está confirmado e o que não está
-`developers.magalu.com` ficou bloqueado na rede do ambiente; o que segue foi conferido em
-21/10/2026 pelo conteúdo indexado da doc oficial, não lendo a página.
+`developers.magalu.com` fica bloqueado na rede do ambiente. Em 21/10/2026 o dono enviou um
+resumo da doc oficial (índice das 27 especificações, conceitos e padrões). O resumo NÃO traz
+os modelos de dados: nomes de campo seguem sem conferência.
 
 **Confirmado na doc:**
-- login em `id.magalu.com/login` com `choose_tenants=true` (obrigatório para seller), code
-  de uso único válido por 10 min, troca e refresh em `id.magalu.com/oauth/token`, access
-  token de ~2 h (7200 s);
-- o `scope` pedido SOMA aos padrão do app, e os escopos são granulares:
-  `open:portfolio-skus-seller:read`, `open:portfolio-prices-seller:read`,
-  `open:portfolio-stocks-seller:read`, `open:order-order-seller:read`. O app no ID Magalu
-  precisa ter cada um habilitado;
-- base `https://api.magalu.com`; as specs ficam em `developers.magalu.com/apis/orders.openapi.yaml`
-  e `.../products.openapi.yaml`.
+- login em `id.magalu.com/login` com `choose_tenants=true` e `state`; code de uso único,
+  10 min; troca e refresh em `POST id.magalu.com/oauth/token`; respeitar `expires_in`;
+- base `https://api.magalu.com`. Perguntas, conversas e inventário de fulfillment ficam em
+  `https://services.magalu.com`; Ads, promoções e financeiro em `api.magalu.com`;
+- rotas usadas hoje existem: `GET /seller/v1/portfolios/skus` e `GET /seller/v1/orders`.
+  Preço e estoque são POR SKU: `GET /seller/v1/portfolios/prices/{sku}` e `.../stocks/{sku}`;
+- paginação `_limit` + `_offset` (limite varia por rota), ou cursor (`_paginate=cursor` e
+  seguir `meta.links.next`, sem misturar com offset); ordenação `_sort=campo:asc|desc`;
+  filtros `campo__gte`, `__lte`, `__in`, `__like`, só os aceitos pela rota;
+- dinheiro = `value`/`amount` ÷ `normalizer`, sem presumir 100 (o mapper já faz assim);
+- 429 é limite por seller e módulo; 202 é processamento pendente;
+- escopos: SKU/preço/estoque `open:portfolio-{skus,prices,stocks}-seller:read`, pedidos
+  `open:order-order-seller:read`, entregas `open:order-delivery-seller:read`, NF-e
+  `open:order-invoice-seller:read`, perguntas `services:questions-seller:read`, conversas
+  `services:conversations-seller:read`. Ads, promoções e financeiro: escopo não listado no
+  resumo. Pedir escopo que o app não tem habilitado pode derrubar o login: só acrescentar
+  junto da tela que o usa;
+- financeiro: CREDIT soma, DEBIT subtrai, INFORMATIVE fica fora; não deduzir de novo o
+  `ABSOLUTE_DISCOUNT` já aplicado ao preço; a análise por pedido exige `order_id` ou um par
+  de datas, janela máxima de 15 dias.
 
-**Relatado por integradores, não está na doc indexada:**
-- teto de 5.000 no offset das listas (o sync para como PARCIAL e diz por quê);
-- a loja vem na claim `tenant` do access token. Sem tenant a conexão é recusada; `sub` não
-  serve (é a pessoa, não a loja).
+**Relatado por integradores, não está na doc:**
+- teto de 5.000 no offset (o sync para como PARCIAL e diz por quê). O cursor da doc deve
+  resolver isso: trocar depois de ver a resposta real;
+- a loja vem na claim `tenant` do access token; sem tenant a conexão é recusada.
 
-**Ainda aberto, conferir nas specs antes de usar com loja real:**
-- nomes dos parâmetros de paginação (`_offset`/`_limit`) e se a lista de pedidos aceita filtro
-  por data (hoje o sync para quando a página inteira já é mais velha que a janela, o que
-  pressupõe ordem decrescente);
-- campos de pedido e SKU e os status. Preço e estoque têm endpoint próprio
-  (`prices`/`stocks`): se a lista de SKUs não os trouxer, a tela de Anúncios mostra
-  "não informado", nunca zero. Os mappers guardam o payload cru, então corrigir o
-  mapeamento não exige buscar de novo.
+**Ainda aberto (precisa da spec YAML ou de uma resposta real):**
+- campos de pedido, item e SKU, e os status. O sync pressupõe a lista de pedidos em ordem
+  decrescente; dá para pedir `_sort`, mas só com o nome do campo de data certo;
+- se a lista de SKUs traz preço e estoque; se não, a tela mostra "não informado". Os mappers
+  guardam o payload cru, então corrigir o mapeamento não exige buscar de novo.
+
+**Telas que dependem da API (rotas confirmadas, campos não):** Campanhas (`/seller/v1/ads/...`),
+Promoções (`/seller/v1/promotions`), Perguntas (`services.magalu.com/v0/questions`),
+Devoluções/Reclamações (SAC: `/seller/v0/tickets`, `.../returns`), Recebíveis
+(`/seller/v1/financial-analysis/...`), Estoque fulfillment (`services.magalu.com/logistics/v1/inventories`).
 
 ## Comandos
 `npm run dev` · `npm run build` · `npm test` (lista de functions + vitest) ·

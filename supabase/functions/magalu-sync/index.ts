@@ -6,7 +6,8 @@
 // Cada rodada grava uma linha em magalu.sync_runs (o que trouxe, se truncou, qual erro).
 // Orçamento de 110s (o Edge corta em ~150s): o que não coube fica marcado como truncado.
 //
-// ⚠️ Caminhos e paginação da API NÃO validados na doc oficial. Ficam nas constantes abaixo.
+// Rotas e paginação (_offset/_limit) conferidas no resumo da doc oficial (21/10/2026);
+// campos dos pedidos e SKUs ainda não (ver CLAUDE.md, "API da Magalu").
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2"
 import { createClient } from "../_shared/supabase-schema.ts"
