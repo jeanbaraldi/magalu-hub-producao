@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import { useAuth } from './AuthContext'
 import { supabase } from '../lib/supabase'
 import { MAGALU_AUTH_URL, MAGALU_ESCOPOS_PADRAO } from '../features/magalu/magalu.constants'
+import { EMBUTIDO } from '../lib/embedHub'
 
 const AppContext = createContext(null)
 
@@ -25,6 +26,8 @@ const MAGALU_REDIRECT_URI = resolveRedirectUri()
 const MAGALU_ESCOPOS = (import.meta.env.VITE_MAGALU_SCOPES ?? '').trim() || MAGALU_ESCOPOS_PADRAO
 
 const ACTIVE_ACCOUNT_KEY = 'magalu_active_account_id'
+/** Aviso da aba de login (mesma origem) para o painel dentro do Hub recarregar as lojas. */
+const MSG_LOJA_CONECTADA = 'magalu-loja-conectada'
 
 async function callEdgeFunction(fnName, params = {}, options = {}, accessToken = null) {
   const queryString = new URLSearchParams(params).toString()
@@ -127,6 +130,13 @@ export function AppProvider({ children }) {
     authUrl.searchParams.set('response_type', 'code')
     // Para seller é sempre true: é o que deixa a pessoa escolher QUAL loja autoriza.
     authUrl.searchParams.set('choose_tenants', 'true')
+    // Dentro do Hub o painel roda num iframe, e o ID Magalu não abre dentro de quadro
+    // de outro site: o login vai numa aba nova, que avisa este painel ao terminar.
+    if (EMBUTIDO) {
+      const aba = window.open(authUrl.toString(), '_blank')
+      if (!aba) setConnectionError('O navegador bloqueou a aba de login da Magalu. Libere pop-ups para este site e clique em Conectar loja de novo.')
+      return
+    }
     window.location.href = authUrl.toString()
   }
 
@@ -163,12 +173,37 @@ export function AppProvider({ children }) {
         localStorage.setItem(ACTIVE_ACCOUNT_KEY, String(data.account_id))
         setActiveSellerIdState(String(data.account_id))
       }
+      // Aba aberta pelo painel dentro do Hub: avisa o painel e fecha.
+      if (window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage({ type: MSG_LOJA_CONECTADA, account_id: data.account_id ?? null }, window.location.origin)
+          setTimeout(() => window.close(), 1500)
+        } catch {
+          // sem acesso à aba de origem: fica aberta mostrando a loja conectada
+        }
+      }
     } catch (err) {
       setConnectionError(err.message)
     } finally {
       setIsConnecting(false)
     }
   }
+
+  // Painel dentro do Hub: recarrega as lojas quando a aba de login avisa que conectou.
+  useEffect(() => {
+    if (!EMBUTIDO || !session) return undefined
+    const aoReceber = (event) => {
+      if (event.origin !== window.location.origin || event.data?.type !== MSG_LOJA_CONECTADA) return
+      if (event.data.account_id) {
+        localStorage.setItem(ACTIVE_ACCOUNT_KEY, String(event.data.account_id))
+        setActiveSellerIdState(String(event.data.account_id))
+      }
+      setConnectionError(null)
+      loadSellers()
+    }
+    window.addEventListener('message', aoReceber)
+    return () => window.removeEventListener('message', aoReceber)
+  }, [session, loadSellers])
 
   // Só depois de logado: a tela /login não pode listar lojas.
   useEffect(() => {
