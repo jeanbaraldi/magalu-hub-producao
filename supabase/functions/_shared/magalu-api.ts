@@ -138,11 +138,12 @@ export async function lojaDoToken(token: string): Promise<{ id: string; nome: st
   return lojaDaRespostaMe(body)
 }
 
-/** Pura: { tenant: { id }, seller: { name } } -> { id, nome }. */
+/** Pura: { tenant: { id }, seller: { name?, id } } -> { id, nome }. */
 export function lojaDaRespostaMe(body: unknown): { id: string; nome: string | null } | null {
   const b = (body ?? {}) as Record<string, any>
   const id = String(b?.tenant?.id ?? "").trim()
   if (!id) return null
-  const nome = String(b?.seller?.name ?? "").trim()
+  // Na prática a rota não traz seller.name, só seller.id (o apelido da loja, ex. "minhaloja2").
+  const nome = String(b?.seller?.name ?? b?.seller?.id ?? "").trim()
   return { id, nome: nome || null }
 }
