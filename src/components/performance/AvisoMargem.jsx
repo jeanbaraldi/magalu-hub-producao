@@ -4,9 +4,10 @@ import { Lock, AlertTriangle } from 'lucide-react'
 /**
  * Avisos do que falta para a margem: acesso, comissão/imposto (/impostos), custo (/produtos)
  * e frete. Compartilhado por Performance, Lucratividade e Rentabilidade.
- * @param {{ podeVerValores:boolean, cfg:object|null, semCusto?:number, loading?:boolean }} props
+ * `comissaoCompleta`: a Magalu informou a comissão de todo item vendido (aí o % não faz falta).
+ * @param {{ podeVerValores:boolean, cfg:object|null, semCusto?:number, comissaoCompleta?:boolean, loading?:boolean }} props
  */
-export default function AvisoMargem({ podeVerValores, cfg, semCusto = 0, loading }) {
+export default function AvisoMargem({ podeVerValores, cfg, semCusto = 0, comissaoCompleta = false, loading }) {
   if (loading) return null
   if (!podeVerValores) {
     return (
@@ -16,7 +17,7 @@ export default function AvisoMargem({ podeVerValores, cfg, semCusto = 0, loading
       </div>
     )
   }
-  const semComissao = cfg?.commission_pct == null
+  const semComissao = cfg?.commission_pct == null && !comissaoCompleta
   const semImposto = cfg?.tax_pct == null
   const semFrete = cfg?.freight_pct == null
   if (!semComissao && !semImposto && semCusto === 0 && !semFrete) return null

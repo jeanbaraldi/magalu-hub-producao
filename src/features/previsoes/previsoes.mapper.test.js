@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { payloadSpec } from '../magalu/specFixture'
 import { mapPrevisoes, indicesSemana, backtest, tendencia7, montarSeries, diasFuturos, nivelBase } from './previsoes.mapper'
 import { listaDias } from '../relatorios/relatorios.mapper'
 
@@ -7,7 +8,7 @@ const dias90 = listaDias(90, agora, 1)
 
 /** Pedido às 12h BRT do dia, com um item. */
 const ped = (dia, sku, quantity, status = 'approved') => ({
-  order_id: `${dia}-${sku}`, status, purchased_at: `${dia}T15:00:00Z`, payload: { items: [{ sku, name: `Prod ${sku}`, quantity }] },
+  order_id: `${dia}-${sku}`, status, purchased_at: `${dia}T15:00:00Z`, payload: payloadSpec([{ sku, name: `Prod ${sku}`, quantity }]),
 })
 
 describe('previsoes.mapper', () => {

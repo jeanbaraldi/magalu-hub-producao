@@ -14,13 +14,13 @@ import { createClient } from "../_shared/supabase-schema.ts"
 import { cronOuUsuario, naoAutorizado } from "../_shared/cron-auth.ts"
 import { filtrarLojas, lojasDoUsuario, negarLoja, respostaLojaNegada, TODAS } from "../_shared/hub-lojas.ts"
 import { carregarConfig, listaDaResposta, mgGet, tokenValido, type Credencial } from "../_shared/magalu-api.ts"
-import { mapPedido, mapSku } from "./logic.ts"
+import { estoqueDaResposta, mapPedido, mapSku, precoDaResposta } from "./logic.ts"
 
 const CAMINHO_SKUS = "/seller/v1/portfolios/skus"
 const CAMINHO_PEDIDOS = "/seller/v1/orders"
 const LIMITE_PAGINA = 100
-// A Magalu não aceita offset acima de 5.000 (relatado por integradores, não está na doc
-// indexada): passado o teto a rodada para como PARCIAL, nunca como completa.
+// SKUs aceitam no máximo 100 por página (spec). Teto de offset 5.000 (relatado por
+// integradores, não está na spec): passado o teto a rodada para como PARCIAL.
 const TETO_OFFSET = 5000
 const MAX_PAGINAS = TETO_OFFSET / LIMITE_PAGINA
 const ORCAMENTO_MS = 110_000
@@ -35,19 +35,23 @@ type Sb = SupabaseClient<any, "public", any>
 type Resultado = { fetched: number; truncated: boolean; error: string | null }
 
 async function paginar(
-  token: string, caminho: string, prazo: number,
-  aoReceber: (itens: unknown[]) => Promise<boolean>, // false = parar (ex.: saiu da janela)
+  token: string, caminho: string, prazo: number, filtros: Record<string, string>,
+  aoReceber: (itens: unknown[]) => Promise<boolean>, // false = parar
 ): Promise<Resultado> {
   let fetched = 0
+  let offset = 0
   for (let pagina = 0; pagina < MAX_PAGINAS; pagina++) {
     if (Date.now() > prazo) return { fetched, truncated: true, error: null }
-    const { status, body } = await mgGet(token, caminho, { _offset: pagina * LIMITE_PAGINA, _limit: LIMITE_PAGINA })
+    const { status, body } = await mgGet(token, caminho, { ...filtros, _offset: offset, _limit: LIMITE_PAGINA })
     if (status !== 200) return { fetched, truncated: true, error: `HTTP ${status}: ${JSON.stringify(body).slice(0, 300)}` }
     const itens = listaDaResposta(body)
     if (!itens) return { fetched, truncated: true, error: `Formato de resposta não reconhecido: ${JSON.stringify(body).slice(0, 300)}` }
     fetched += itens.length
+    offset += itens.length
     const seguir = await aoReceber(itens)
-    if (!seguir || itens.length < LIMITE_PAGINA) return { fetched, truncated: false, error: null }
+    // A API pode devolver menos que o pedido (meta.page.limit é o limite efetivo).
+    const limiteEfetivo = Number((body as any)?.meta?.page?.limit) || LIMITE_PAGINA
+    if (!seguir || itens.length === 0 || itens.length < limiteEfetivo) return { fetched, truncated: false, error: null }
   }
   return { fetched, truncated: true, error: `Teto de ${TETO_OFFSET} registros por paginação atingido; o restante não foi lido` }
 }
@@ -59,32 +63,84 @@ async function registrar(supabase: Sb, accountId: string, kind: string, inicio: 
   })
 }
 
+/** Grava só as colunas conhecidas, em lotes homogêneos (PostgREST não mistura chaves). */
+async function gravarParcial(supabase: Sb, linhas: Record<string, unknown>[]) {
+  const grupos = new Map<string, Record<string, unknown>[]>()
+  for (const l of linhas) {
+    const chave = Object.keys(l).sort().join(",")
+    grupos.set(chave, [...(grupos.get(chave) ?? []), l])
+  }
+  for (const lote of grupos.values()) {
+    const { error } = await supabase.from("skus").upsert(lote, { onConflict: "account_id,sku" })
+    if (error) throw new Error(`Falha ao gravar preço/estoque: ${error.message}`)
+  }
+}
+
+/**
+ * Preço e estoque vêm de uma rota por SKU (a lista não traz). O que não foi lido mantém o
+ * valor anterior: nunca grava null por cima de um preço conhecido.
+ */
+async function precosEEstoques(supabase: Sb, accountId: string, token: string, skus: string[], prazo: number): Promise<number> {
+  let semLeitura = 0
+  const fila = [...skus]
+  const linhas: Record<string, unknown>[] = []
+  const trabalhador = async () => {
+    while (fila.length) {
+      const sku = fila.shift()!
+      if (Date.now() > prazo) { semLeitura++; continue }
+      const enc = encodeURIComponent(sku)
+      const [p, e] = await Promise.all([
+        mgGet(token, `/seller/v1/portfolios/prices/${enc}`),
+        mgGet(token, `/seller/v1/portfolios/stocks/${enc}`),
+      ])
+      const linha: Record<string, unknown> = { account_id: accountId, sku }
+      const preco = p.status === 200 ? precoDaResposta(p.body) : null
+      if (preco) { linha.price = preco.price; linha.list_price = preco.list_price }
+      const estoque = e.status === 200 ? estoqueDaResposta(e.body) : null
+      if (estoque !== null) linha.stock = estoque
+      if (!preco || estoque === null) semLeitura++
+      if (Object.keys(linha).length > 2) linhas.push(linha)
+    }
+  }
+  await Promise.all(Array.from({ length: 4 }, trabalhador))
+  if (linhas.length) await gravarParcial(supabase, linhas)
+  return semLeitura
+}
+
 async function syncSkus(supabase: Sb, cred: Credencial, token: string, prazo: number): Promise<Resultado> {
   const inicio = new Date().toISOString()
-  const r = await paginar(token, CAMINHO_SKUS, prazo, async (itens) => {
+  let semPrecoOuEstoque = 0
+  const r = await paginar(token, CAMINHO_SKUS, prazo, { _sort: "sku:asc" }, async (itens) => {
     const linhas = itens.map((i) => mapSku(cred.account_id, i, inicio)).filter((l) => l !== null)
     if (linhas.length) {
       const { error } = await supabase.from("skus").upsert(linhas, { onConflict: "account_id,sku" })
       if (error) throw new Error(`Falha ao gravar SKUs: ${error.message}`)
+      semPrecoOuEstoque += await precosEEstoques(supabase, cred.account_id, token, linhas.map((l) => l.sku), prazo)
     }
     return true
   })
-  await registrar(supabase, cred.account_id, "skus", inicio, r)
-  return r
+  // SKU sem preço/estoque lido deixa a rodada PARCIAL e diz quantos.
+  const final: Resultado = semPrecoOuEstoque > 0
+    ? { ...r, truncated: true, error: r.error ?? `${semPrecoOuEstoque} SKU(s) sem preço ou estoque lido nesta rodada` }
+    : r
+  await registrar(supabase, cred.account_id, "skus", inicio, final)
+  return final
 }
+
+/** Data no formato do exemplo da spec: 2021-06-18T03:05:54+00:00. */
+const dataApi = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "+00:00")
 
 async function syncPedidos(supabase: Sb, cred: Credencial, token: string, prazo: number, dias: number): Promise<Resultado> {
   const inicio = new Date().toISOString()
-  const corte = Date.now() - dias * 86_400_000
-  const r = await paginar(token, CAMINHO_PEDIDOS, prazo, async (itens) => {
+  // updated_at pega pedido novo E mudança de status (cancelamento, entrega) de pedido antigo.
+  const filtros = { updated_at__gte: dataApi(Date.now() - dias * 86_400_000), _sort: "purchased_at:desc" }
+  const r = await paginar(token, CAMINHO_PEDIDOS, prazo, filtros, async (itens) => {
     const linhas = itens.map((p) => mapPedido(cred.account_id, p, inicio)).filter((l) => l !== null)
     if (linhas.length) {
       const { error } = await supabase.from("orders").upsert(linhas, { onConflict: "account_id,order_id" })
       if (error) throw new Error(`Falha ao gravar pedidos: ${error.message}`)
     }
-    // Para quando a página inteira já é anterior à janela. Data ilegível não decide nada.
-    const datas = linhas.map((l) => l.purchased_at).filter((d): d is string => !!d).map((d) => new Date(d).getTime())
-    return !(datas.length === linhas.length && datas.length > 0 && Math.max(...datas) < corte)
+    return true
   })
   await registrar(supabase, cred.account_id, "orders", inicio, r)
   return r

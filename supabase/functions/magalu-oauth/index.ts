@@ -7,7 +7,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "../_shared/supabase-schema.ts"
 import { filtrarLojas, lojaPermitida, lojasDoUsuario, respostaLojaNegada } from "../_shared/hub-lojas.ts"
-import { carregarConfig, claimsDoToken, contaDoToken, expiraEm, MAGALU_TOKEN_URL, tokenValido, type Credencial } from "../_shared/magalu-api.ts"
+import { carregarConfig, claimsDoToken, contaDoToken, expiraEm, lojaDoToken, MAGALU_TOKEN_URL, tokenValido, type Credencial } from "../_shared/magalu-api.ts"
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? ""
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? ""
@@ -114,14 +114,16 @@ Deno.serve(async (req) => {
       if (!res.ok || !tokenData?.access_token) {
         return json({ error: "Troca do código falhou", details: tokenData }, 400)
       }
-      const accountId = contaDoToken(tokenData)
+      // Loja pela rota oficial; as claims do JWT são só o plano B.
+      const loja = await lojaDoToken(String(tokenData.access_token))
+      const accountId = loja?.id ?? contaDoToken(tokenData)
       if (!accountId) {
-        return json({ error: "Não foi possível identificar a loja autorizada", details: "A resposta do ID Magalu não trouxe o tenant. Confira os escopos e a doc." }, 400)
+        return json({ error: "Não foi possível identificar a loja autorizada", details: "GET /seller/v1/portfolios/me não respondeu com a loja. Confira se o escopo open:portfolio-skus-seller:read está habilitado no app." }, 400)
       }
       const claims = claimsDoToken(String(tokenData.access_token)) ?? {}
       const { error } = await supabase.from("magalu_credentials").upsert({
         account_id: accountId,
-        nickname: nomeDaLoja(tokenData),
+        nickname: loja?.nome ?? nomeDaLoja(tokenData),
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token ?? null,
         expires_at: expiraEm(tokenData),

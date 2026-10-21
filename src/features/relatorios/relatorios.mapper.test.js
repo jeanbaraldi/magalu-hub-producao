@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
+import { payloadSpec } from '../magalu/specFixture'
 import { mapRelatorio, listaDias, diaDaSemana } from './relatorios.mapper'
 
 const agora = new Date('2026-10-21T15:00:00Z') // quarta, 12h BRT
-const p = (id, status, total, at, items = []) => ({ order_id: id, status, total_amount: total, purchased_at: at, payload: { items } })
+const p = (id, status, total, at, items = []) => ({ order_id: id, status, total_amount: total, purchased_at: at, payload: payloadSpec(items) })
 
 describe('relatorios.mapper', () => {
   it('período atual inclui hoje; o anterior são os N dias antes', () => {

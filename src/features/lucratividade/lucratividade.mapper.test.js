@@ -1,16 +1,17 @@
 import { describe, it, expect } from 'vitest'
+import { payloadSpec } from '../magalu/specFixture'
 import { mapLucratividade, filtrarLucratividade, faixaDe } from './lucratividade.mapper'
 
 const AGORA = '2026-10-21T15:00:00Z'
 const cfg = { tax_pct: 0, commission_pct: 0, freight_pct: null }
 const pedidos = [{
   order_id: '1', status: 'approved', purchased_at: '2026-10-20T12:00:00Z',
-  payload: { items: [
+  payload: payloadSpec([
     { sku: 'A', quantity: 1, total: 100 },
     { sku: 'B', quantity: 1, total: 300 },
     { sku: 'C', quantity: 1, total: 50 },
     { sku: 'D', quantity: 1, total: 80 },
-  ] },
+  ]),
 }]
 const custos = new Map([['A', 10], ['B', 290], ['C', 70]])
 

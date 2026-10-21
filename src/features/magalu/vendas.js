@@ -4,9 +4,10 @@
  * mexeu num, mexa no outro.
  */
 
-// NÃO VALIDADO contra a doc da Magalu: os status vêm do payload cru e podem
-// ter outros nomes. Status nulo nunca conta como venda (não sabemos o que é).
-const NAO_VENDA = new Set(['cancelled', 'canceled', 'cancelado', 'unpaid', 'not_paid', 'nao_pago', 'pending_payment'])
+// Status do pedido (spec orders.openapi.yaml): new (pagamento não aprovado), approved,
+// cancelled (todas as entregas canceladas), finished. `new` ainda não é venda.
+// Status nulo nunca conta como venda (não sabemos o que é).
+const NAO_VENDA = new Set(['new', 'cancelled', 'canceled', 'cancelado', 'unpaid', 'not_paid', 'nao_pago', 'pending_payment'])
 
 export function pedidoContaComoVenda(status) {
   return !!status && !NAO_VENDA.has(String(status).toLowerCase())

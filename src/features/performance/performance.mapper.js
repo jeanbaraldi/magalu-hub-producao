@@ -46,7 +46,7 @@ export function montarLinhas(pedidos, { catalogo = new Map(), custos = new Map()
       return { ...base, mc: null, mcPct: null, faltando: ['sem acesso a custos e margem'], componentes: { custo: null, comissao: null, imposto: null, frete: null }, semFrete: true }
     }
     const m = calcularMargem(l, base.custoUnit, cfg)
-    return { ...base, mc: m.mc, mcPct: m.mcPct, faltando: m.faltando, componentes: m.componentes, semFrete: m.semFrete }
+    return { ...base, mc: m.mc, mcPct: m.mcPct, faltando: m.faltando, componentes: m.componentes, semFrete: m.semFrete, fonteComissao: m.fonteComissao }
   })
   return { rows, semSku }
 }

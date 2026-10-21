@@ -1,19 +1,32 @@
 import { describe, it, expect } from 'vitest'
 import { itensDoPedido, agregarPorSku, dinheiro } from './itens'
 
-describe('itensDoPedido', () => {
-  it('lê items com info/quantity/unit_price e calcula o total', () => {
-    const its = itensDoPedido({ items: [{ info: { sku: 'A1', name: 'Panela' }, quantity: 2, unit_price: { value: 1990, normalizer: 100 } }] })
-    expect(its).toEqual([{ sku: 'A1', titulo: 'Panela', quantidade: 2, precoUnitario: 19.9, total: 39.8 }])
+const brl = (c) => ({ total: c, normalizer: 100, currency: 'BRL' })
+const item = (sku, qtd, centavos, comissao) => ({
+  info: { sku, name: `Produto ${sku}` }, quantity: qtd,
+  unit_price: { value: centavos, normalizer: 100 },
+  amounts: { total: centavos * qtd, normalizer: 100, commission: comissao == null ? undefined : brl(comissao) },
+})
+
+describe('itensDoPedido (formato da spec)', () => {
+  it('lê deliveries[].items com unit_price e comissão do item', () => {
+    const its = itensDoPedido({ deliveries: [{ status: 'approved', items: [item('A1', 2, 1990, 600)] }] })
+    expect(its).toEqual([{ sku: 'A1', titulo: 'Produto A1', quantidade: 2, precoUnitario: 19.9, total: 39.8, comissao: 6 }])
   })
-  it('junta itens de várias entregas', () => {
-    const its = itensDoPedido({ deliveries: [{ items: [{ sku: 'A' }] }, { items: [{ sku: 'B' }] }] })
-    expect(its.map((i) => i.sku)).toEqual(['A', 'B'])
+  it('ignora a entrega cancelada (cancelamento parcial)', () => {
+    const its = itensDoPedido({ deliveries: [
+      { status: 'delivered', items: [item('A', 1, 1000)] },
+      { status: 'cancelled', items: [item('B', 1, 1000)] },
+    ] })
+    expect(its.map((i) => i.sku)).toEqual(['A'])
   })
-  it('campo ausente vira null, nunca zero', () => {
-    const [it0] = itensDoPedido({ items: [{ sku: 'X' }] })
-    expect(it0.quantidade).toBeNull()
-    expect(it0.total).toBeNull()
+  it('sem unit_price usa amounts do item; sem normalizer é null, nunca zero', () => {
+    const [a] = itensDoPedido({ deliveries: [{ items: [{ info: { sku: 'X' }, quantity: 1, amounts: brl(500) }] }] })
+    expect(a.total).toBe(5)
+    const [b] = itensDoPedido({ deliveries: [{ items: [{ info: { sku: 'Y' }, amounts: { total: 500 } }] }] })
+    expect(b.total).toBeNull()
+    expect(b.quantidade).toBeNull()
+    expect(b.comissao).toBeNull()
   })
   it('payload sem itens devolve lista vazia', () => {
     expect(itensDoPedido({})).toEqual([])
@@ -25,18 +38,20 @@ describe('dinheiro', () => {
   it('aceita string com vírgula e rejeita lixo', () => {
     expect(dinheiro('10,5')).toBe(10.5)
     expect(dinheiro('abc')).toBeNull()
+    expect(dinheiro({ value: 7 })).toBeNull()
   })
 })
 
 describe('agregarPorSku', () => {
   const pedidos = [
-    { order_id: '1', status: 'approved', payload: { items: [{ sku: 'A', quantity: 1, total: 10 }, { quantity: 1, total: 5 }] } },
-    { order_id: '2', status: 'approved', payload: { items: [{ sku: 'A', quantity: 2 }] } },
-    { order_id: '3', status: 'cancelled', payload: { items: [{ sku: 'A', quantity: 9, total: 99 }] } },
+    { order_id: '1', status: 'approved', payload: { deliveries: [{ items: [item('A', 1, 1000, 200), { info: {}, quantity: 1 }] }] } },
+    { order_id: '2', status: 'finished', payload: { deliveries: [{ items: [{ info: { sku: 'A' }, quantity: 2 }] }] } },
+    { order_id: '3', status: 'cancelled', payload: { deliveries: [{ items: [item('A', 9, 1100)] }] } },
+    { order_id: '4', status: 'new', payload: { deliveries: [{ items: [item('A', 5, 1000)] }] } },
   ]
-  it('soma só vendas, conta itens sem valor e sem SKU', () => {
+  it('soma só vendas, conta itens sem valor, sem comissão e sem SKU', () => {
     const { linhas, semSku } = agregarPorSku(pedidos)
     expect(semSku).toBe(1)
-    expect(linhas).toEqual([{ sku: 'A', titulo: null, unidades: 3, receita: 10, itensSemValor: 1, itensSemQtd: 0, pedidos: 2 }])
+    expect(linhas).toEqual([{ sku: 'A', titulo: 'Produto A', unidades: 3, receita: 10, comissao: 2, itensSemComissao: 1, itensSemValor: 1, itensSemQtd: 0, pedidos: 2 }])
   })
 })

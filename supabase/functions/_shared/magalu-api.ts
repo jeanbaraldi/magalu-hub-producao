@@ -1,12 +1,11 @@
 // Acesso à API da Magalu (Magalu Open API) a partir das Edge Functions.
 //
-// ⚠️ NÃO VALIDADO contra a documentação oficial (developers.magalu.com estava bloqueado
-// pela rede do ambiente de desenvolvimento). O que veio do índice público da doc:
-//   - OAuth 2.0 Authorization Code no ID Magalu; troca do código em id.magalu.com/oauth/token
-//     (POST JSON com client_id, client_secret, redirect_uri, code, grant_type);
-//   - base das APIs: https://api.magalu.com;
-//   - access token curto (~2h) e refresh token de USO ÚNICO: salvar o novo na hora.
-// Tudo que é palpite fica nomeado aqui, num lugar só, para conferir contra a doc.
+// Conferido na doc oficial (developers.magalu.com, 21/10/2026):
+//   - troca do code: POST id.magalu.com/oauth/token em JSON;
+//   - renovação: o MESMO endpoint, mas em application/x-www-form-urlencoded;
+//   - access token de ~7200 s; a resposta traz um refresh_token novo: salvar na hora;
+//   - a resposta do token NÃO traz a loja: ela vem de GET /seller/v1/portfolios/me
+//     (tenant.id, seller.name).
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2"
 import { createClient } from "./supabase-schema.ts"
 import { credenciaisDoHub, CHAVES_APP } from "./hub-credenciais.ts"
@@ -51,10 +50,9 @@ export function claimsDoToken(token: string): Record<string, unknown> | null {
 }
 
 /**
- * Identificador da LOJA autorizada. A Magalu autoriza por tenant (choose_tenants=true).
- * ⚠️ Onde o tenant vem na resposta não foi confirmado: procura nos nomes plausíveis da
- * resposta do token e das claims do JWT, nessa ordem. Sem nenhum, devolve null e a
- * conexão é RECUSADA (gravar sem identificador misturaria lojas).
+ * Identificador da loja a partir do token, usado SÓ se GET /seller/v1/portfolios/me falhar.
+ * A doc não documenta claims do JWT; sem nenhum candidato devolve null e a conexão é
+ * RECUSADA (gravar sem identificador misturaria lojas).
  */
 export function contaDoToken(tokenData: Record<string, unknown>): string | null {
   const claims = claimsDoToken(String(tokenData.access_token ?? "")) ?? {}
@@ -83,11 +81,11 @@ export async function tokenValido(supabase: Sb, cred: Credencial, config: Record
   if (!cred.refresh_token) throw new Error("NO_REFRESH_TOKEN")
   const res = await fetch(MAGALU_TOKEN_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
       grant_type: "refresh_token",
-      client_id: config.MAGALU_CLIENT_ID,
-      client_secret: config.MAGALU_CLIENT_SECRET,
+      client_id: config.MAGALU_CLIENT_ID ?? "",
+      client_secret: config.MAGALU_CLIENT_SECRET ?? "",
       refresh_token: cred.refresh_token,
     }),
   })
@@ -128,4 +126,23 @@ export function listaDaResposta(body: unknown): unknown[] | null {
     if (Array.isArray(b[chave])) return b[chave] as unknown[]
   }
   return null
+}
+
+/**
+ * Loja autorizada pelo token, pela rota oficial GET /seller/v1/portfolios/me.
+ * null quando a chamada falha ou não traz tenant.id.
+ */
+export async function lojaDoToken(token: string): Promise<{ id: string; nome: string | null } | null> {
+  const { status, body } = await mgGet(token, "/seller/v1/portfolios/me")
+  if (status !== 200 || !body || typeof body !== "object") return null
+  return lojaDaRespostaMe(body)
+}
+
+/** Pura: { tenant: { id }, seller: { name } } -> { id, nome }. */
+export function lojaDaRespostaMe(body: unknown): { id: string; nome: string | null } | null {
+  const b = (body ?? {}) as Record<string, any>
+  const id = String(b?.tenant?.id ?? "").trim()
+  if (!id) return null
+  const nome = String(b?.seller?.name ?? "").trim()
+  return { id, nome: nome || null }
 }

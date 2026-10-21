@@ -36,3 +36,22 @@ describe('curvaAbc', () => {
     expect(r[4].participacao).toBeNull()
   })
 })
+
+describe('calcularMargem com a comissão informada pela Magalu', () => {
+  const cfg = { tax_pct: 10, commission_pct: null, freight_pct: null }
+  it('usa a comissão real quando todo item trouxe e dispensa o %', () => {
+    const m = calcularMargem({ receita: 100, unidades: 1, comissao: 16, itensSemComissao: 0 }, 50, cfg)
+    expect(m.mc).toBe(24)
+    expect(m.fonteComissao).toBe('magalu')
+  })
+  it('item sem comissão e sem % configurado: margem indisponível', () => {
+    const m = calcularMargem({ receita: 100, unidades: 1, comissao: 16, itensSemComissao: 1 }, 50, cfg)
+    expect(m.mc).toBeNull()
+    expect(m.faltando).toContain('comissão da Magalu')
+  })
+  it('item sem comissão com % configurado: usa o % para o SKU inteiro', () => {
+    const m = calcularMargem({ receita: 100, unidades: 1, comissao: 16, itensSemComissao: 1 }, 50, { ...cfg, commission_pct: 20 })
+    expect(m.mc).toBe(20)
+    expect(m.fonteComissao).toBe('percentual')
+  })
+})

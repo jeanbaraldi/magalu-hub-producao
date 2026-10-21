@@ -149,7 +149,8 @@ export function diagnosticar({ skus, pedidos, limites, custos, cfg, podeVerValor
       })
     }
     const faltando = []
-    if (cfg?.commission_pct == null) faltando.push('comissão da Magalu')
+    // A Magalu informa a comissão por item; o % só faz falta se algum item veio sem ela.
+    if (cfg?.commission_pct == null && vendas30.linhas.some((v) => v.itensSemComissao > 0)) faltando.push('comissão da Magalu')
     if (cfg?.tax_pct == null) faltando.push('alíquota de imposto')
     if (faltando.length > 0) {
       itens.push({

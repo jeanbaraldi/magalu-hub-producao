@@ -38,7 +38,7 @@ export default function PedidosTable({ rows, loading, pageSize = 50 }) {
           <tbody className="divide-y divide-slate-100">
             {visiveis.map((r) => (
               <tr key={r.id} className="hover:bg-slate-50">
-                <td className="px-4 py-2.5 font-mono text-xs text-slate-700">{r.id}</td>
+                <td className="px-4 py-2.5 font-mono text-xs text-slate-700" title={r.id}>{r.codigo ?? r.id}</td>
                 <td className="px-4 py-2.5 max-w-xs">
                   <p className="truncate text-slate-800">{r.primeiroItem?.titulo ?? '—'}</p>
                   {r.primeiroItem?.sku && <p className="text-[11px] text-slate-400 font-mono">{r.primeiroItem.sku}</p>}

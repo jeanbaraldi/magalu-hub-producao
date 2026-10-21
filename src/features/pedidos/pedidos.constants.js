@@ -7,10 +7,11 @@ export const PERIOD_OPTIONS = [
 export const DEFAULT_PERIOD = 30
 export const PAGE_SIZE = 50
 
-// Rótulos dos status da Magalu. NÃO VALIDADO contra a doc: status desconhecido
-// aparece como veio (Title Case), nunca é escondido nem trocado por outro.
+// Status do pedido na spec: new, approved, cancelled, finished (os de entrega também
+// aparecem por compatibilidade). Status desconhecido aparece como veio, em Title Case.
 export const STATUS_LABELS = {
-  new: { label: 'Novo', tone: 'slate' },
+  new: { label: 'Aguardando pagamento', tone: 'amber' },
+  frozen: { label: 'Em análise', tone: 'amber' },
   approved: { label: 'Aprovado', tone: 'blue' },
   invoiced: { label: 'Faturado', tone: 'blue' },
   shipped: { label: 'Enviado', tone: 'violet' },

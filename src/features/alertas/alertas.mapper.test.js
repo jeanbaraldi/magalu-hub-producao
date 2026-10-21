@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest'
+import { payloadSpec } from '../magalu/specFixture'
 import { diagnosticar, dividirSemanas } from './alertas.mapper'
 
 const agora = new Date('2026-10-21T15:00:00Z')
 const limites = { desde7: '2026-10-15T03:00:00.000Z', desde14: '2026-10-08T03:00:00.000Z' }
 const syncOk = { finished_at: '2026-10-21T12:00:00Z', truncated: false, error: null }
-const ped = (id, quando, sku, qtd, total) => ({ order_id: id, status: 'approved', purchased_at: quando, payload: { items: [{ sku, quantity: qtd, total }] } })
+const ped = (id, quando, sku, qtd, total) => ({ order_id: id, status: 'approved', purchased_at: quando, payload: payloadSpec([{ sku, quantity: qtd, total }]) })
 const base = { limites, custos: new Map(), cfg: { tax_pct: 8, commission_pct: 16 }, podeVerValores: true, syncs: { orders: syncOk, skus: syncOk }, agora }
 
 describe('alertas.mapper', () => {

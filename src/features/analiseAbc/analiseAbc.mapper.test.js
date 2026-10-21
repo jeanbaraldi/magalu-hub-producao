@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
+import { payloadSpec } from '../magalu/specFixture'
 import { mapAnaliseAbc, classificar, movimento, filtrarAbc, valorDaMetrica } from './analiseAbc.mapper'
 
 const AGORA = '2026-10-21T15:00:00Z'
-const ped = (id, quando, itens) => ({ order_id: id, status: 'approved', purchased_at: quando, payload: { items: itens } })
+const ped = (id, quando, itens) => ({ order_id: id, status: 'approved', purchased_at: quando, payload: payloadSpec(itens) })
 
 describe('valorDaMetrica', () => {
   it('sem nenhum dado vira null, nunca zero', () => {

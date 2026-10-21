@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
+import { payloadSpec } from '../magalu/specFixture'
 import { mapRentabilidade, cascata, diasDoPeriodo } from './rentabilidade.mapper'
 
 const AGORA = '2026-10-21T15:00:00Z'
 const cfg = { tax_pct: 10, commission_pct: 20, freight_pct: null }
-const ped = (id, quando, itens, status = 'approved') => ({ order_id: id, status, purchased_at: quando, payload: { items: itens } })
+const ped = (id, quando, itens, status = 'approved') => ({ order_id: id, status, purchased_at: quando, payload: payloadSpec(itens) })
 const pedidos = [
   ped('1', '2026-10-20T12:00:00Z', [{ sku: 'A', quantity: 2, total: 200 }]),
   ped('2', '2026-10-21T12:00:00Z', [{ sku: 'B', quantity: 1, total: 100 }]),

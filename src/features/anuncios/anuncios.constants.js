@@ -9,8 +9,13 @@ export const FILTROS = [
   { value: 'inativos', label: 'Inativos' },
 ]
 
-// NÃO VALIDADO contra a doc: status de SKU fora desta lista aparece como veio.
+// Status de SKU na spec: PUBLISHED, UNPUBLISHED, BLOCKED, UNDER_REVIEW, DELETING, DELETED.
+// Fora desta lista aparece como veio.
 export const STATUS_SKU = {
+  unpublished: { label: 'Não publicado', tone: 'slate' },
+  under_review: { label: 'Em revisão', tone: 'amber' },
+  deleting: { label: 'Excluindo', tone: 'rose' },
+  deleted: { label: 'Excluído', tone: 'rose' },
   active: { label: 'Ativo', tone: 'emerald' },
   ativo: { label: 'Ativo', tone: 'emerald' },
   published: { label: 'Publicado', tone: 'emerald' },

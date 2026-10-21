@@ -2,6 +2,7 @@
  * Rentabilidade — DRE simplificado da loja no período. Funções PURAS.
  *
  *   Receita − comissão − custo dos produtos − frete − impostos = lucro
+ * Comissão: a informada pela Magalu em cada item; o % de Impostos só cobre o que veio sem ela.
  *
  * O lucro só existe quando TODO componente obrigatório é conhecido para TODO o período
  * (custo de todo SKU vendido, comissão, imposto, nenhum item sem valor/quantidade/SKU).
@@ -16,7 +17,6 @@ const soma = (rows, f) => rows.reduce((s, r) => s + (f(r) ?? 0), 0)
 /** Resumo do DRE a partir das linhas por SKU já com margem. */
 export function resumoDre(rows, { cfg, podeVerValores, semSku = 0, pedidosSemItens = 0 }) {
   const receita = soma(rows, (r) => r.receita)
-  const comissaoPct = cfg?.commission_pct ?? null
   const impostoPct = cfg?.tax_pct ?? null
   const fretePct = cfg?.freight_pct ?? null
   const comCusto = rows.filter((r) => r.custoUnit != null)
@@ -24,7 +24,7 @@ export function resumoDre(rows, { cfg, podeVerValores, semSku = 0, pedidosSemIte
   const faltando = []
   if (!podeVerValores) faltando.push('seu acesso não inclui custos e margem')
   else {
-    if (comissaoPct == null) faltando.push('comissão da Magalu')
+    if (rows.some((r) => r.componentes?.comissao == null)) faltando.push('comissão da Magalu')
     if (impostoPct == null) faltando.push('alíquota de imposto')
     if (comCusto.length < rows.length) faltando.push(`custo de ${rows.length - comCusto.length} SKU(s)`)
     const semValor = soma(rows, (r) => r.itensSemValor)
@@ -35,7 +35,8 @@ export function resumoDre(rows, { cfg, podeVerValores, semSku = 0, pedidosSemIte
     if (pedidosSemItens > 0) faltando.push(`${pedidosSemItens} pedido(s) sem itens legíveis`)
   }
 
-  const comissao = podeVerValores && comissaoPct != null ? receita * comissaoPct / 100 : null
+  const comissao = podeVerValores && rows.length > 0 && rows.every((r) => r.componentes?.comissao != null)
+    ? soma(rows, (r) => r.componentes.comissao) : null
   const imposto = podeVerValores && impostoPct != null ? receita * impostoPct / 100 : null
   const frete = podeVerValores && fretePct != null ? receita * fretePct / 100 : null
   const custo = podeVerValores && comCusto.length > 0 ? soma(comCusto, (r) => r.componentes.custo) : null
@@ -50,6 +51,7 @@ export function resumoDre(rows, { cfg, podeVerValores, semSku = 0, pedidosSemIte
     lucro,
     margem: lucro != null && receita > 0 ? (lucro / receita) * 100 : null,
     completo, faltando,
+    comissaoCompleta: rows.length > 0 && rows.every((r) => r.itensSemComissao === 0),
     cobertura: {
       skusVendidos: rows.length,
       skusComCusto: podeVerValores ? comCusto.length : null,

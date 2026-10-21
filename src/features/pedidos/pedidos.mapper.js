@@ -1,4 +1,5 @@
 import { STATUS_LABELS } from './pedidos.constants'
+import { itensDoPedido } from '../magalu/itens'
 import { pedidoContaComoVenda, pedidoCancelado, somarReceita } from '../magalu/vendas'
 
 function titleCase(s) {
@@ -10,21 +11,17 @@ export function statusInfo(status) {
   return STATUS_LABELS[String(status).toLowerCase()] ?? { label: titleCase(status), tone: 'slate' }
 }
 
-/** Primeiro item do pedido, lido do payload cru com caminhos tolerantes. */
+/** Primeiro item do pedido (spec: deliveries[].items[].info.{sku,name}). */
 function primeiroItem(payload) {
-  const itens = payload?.items ?? payload?.order_items ?? payload?.products ?? payload?.deliveries?.[0]?.items ?? []
-  const it = Array.isArray(itens) ? itens[0] : null
-  if (!it) return null
-  const info = it.info ?? it.product ?? it.sku ?? it
-  return {
-    titulo: info?.name ?? info?.title ?? it?.name ?? it?.title ?? null,
-    sku: info?.id ?? info?.sku ?? it?.sku ?? null,
-  }
+  const it = itensDoPedido(payload)[0]
+  return it ? { titulo: it.titulo, sku: it.sku } : null
 }
 
 export function mapPedidoRow(r) {
   return {
     id: String(r.order_id),
+    // `code` é o número do pedido que aparece para o comprador e no painel da Magalu.
+    codigo: r.payload?.code ? String(r.payload.code) : null,
     status: r.status,
     statusInfo: statusInfo(r.status),
     venda: pedidoContaComoVenda(r.status),
@@ -43,6 +40,7 @@ export function filtrarPedidos(rows, { status = 'todos', busca = '' } = {}) {
     if (status === 'cancelados' && !r.cancelado) return false
     if (!q) return true
     return r.id.toLowerCase().includes(q)
+      || (r.codigo ?? '').toLowerCase().includes(q)
       || (r.primeiroItem?.titulo ?? '').toLowerCase().includes(q)
       || String(r.primeiroItem?.sku ?? '').toLowerCase().includes(q)
   })

@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
+import { payloadSpec } from '../magalu/specFixture'
 import { mapPerformance, tendencia, filtrarPerformance, ordenarPerformance, pedidosNaJanela, montarLinhas } from './performance.mapper'
 
 const AGORA = '2026-10-21T15:00:00Z'
-const ped = (id, quando, itens, status = 'approved') => ({ order_id: id, status, purchased_at: quando, payload: { items: itens } })
+const ped = (id, quando, itens, status = 'approved') => ({ order_id: id, status, purchased_at: quando, payload: payloadSpec(itens) })
 const cfg = { tax_pct: 10, commission_pct: 16, freight_pct: null }
 
 describe('tendencia', () => {

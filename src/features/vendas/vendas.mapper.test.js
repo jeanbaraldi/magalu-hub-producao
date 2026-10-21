@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
+import { payloadSpec } from '../magalu/specFixture'
 import { mapVendasHoje, variacao, horaBrt, somarUnidades } from './vendas.mapper'
 
 // 21/10/2026 12:00 BRT
 const agora = new Date('2026-10-21T15:00:00Z')
-const p = (id, status, total, at, items) => ({ order_id: id, status, total_amount: total, purchased_at: at, payload: { items } })
+const p = (id, status, total, at, items) => ({ order_id: id, status, total_amount: total, purchased_at: at, payload: payloadSpec(items) })
 const item = (sku, quantity, total) => ({ sku, name: `Prod ${sku}`, quantity, total })
 
 describe('vendas.mapper', () => {
