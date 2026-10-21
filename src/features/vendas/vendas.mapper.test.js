@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { payloadSpec } from '../magalu/specFixture'
-import { mapVendasHoje, variacao, horaBrt, somarUnidades } from './vendas.mapper'
+import { mapVendasHoje, variacao, horaBrt, somarUnidades, erroDoSync } from './vendas.mapper'
 
 // 21/10/2026 12:00 BRT
 const agora = new Date('2026-10-21T15:00:00Z')
@@ -56,5 +56,26 @@ describe('vendas.mapper', () => {
 
   it('pedido sem itens legíveis conta como unidade desconhecida', () => {
     expect(somarUnidades([{ payload: {} }])).toEqual({ total: null, semQtd: 1 })
+  })
+  it('última venda ignora cancelado e marca o estado da barra por hora', () => {
+    const vm = mapVendasHoje([
+      p('1', 'approved', 100, '2026-10-21T13:00:00Z', [item('A', 1, 100)]),
+      p('2', 'cancelled', 50, '2026-10-21T14:00:00Z', [item('A', 1, 50)]),
+    ], agora)
+    expect(vm.kpis.ultimaVenda).toBe('2026-10-21T13:00:00Z')
+    expect(vm.horas[10].estado).toBe('passado')
+    expect(vm.horas[12].estado).toBe('agora')
+    expect(vm.horas[13].estado).toBe('futuro')
+  })
+
+  it('sem venda hoje não há última venda', () => {
+    expect(mapVendasHoje([], agora).kpis.ultimaVenda).toBeNull()
+  })
+  it('erro do sync vem de dentro do 200, por loja', () => {
+    expect(erroDoSync({ accounts: [{ account_id: 'x', orders: { fetched: 3 } }] }, 'x')).toBeNull()
+    expect(erroDoSync({ accounts: [{ account_id: 'x', error: 'token' }] }, 'x')).toBe('token')
+    expect(erroDoSync({ accounts: [{ account_id: 'x', orders: { error: 'HTTP 429' } }] }, 'x')).toBe('HTTP 429')
+    expect(erroDoSync({ accounts: [{ account_id: 'x', skipped: 'sem_tempo' }] }, 'x')).toMatch('sem_tempo')
+    expect(erroDoSync(null, 'x')).toBeNull()
   })
 })
