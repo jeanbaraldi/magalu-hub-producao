@@ -12,6 +12,21 @@ Supabase, schema **`magalu`**, acesso decidido pelo Hub.
 - **Configurações** (`/configuracoes`): conectar loja pelo ID Magalu, desconectar,
   sincronizar agora.
 
+## O que a v2 acrescentou (22/10/2026) — menu no formato do Gestor ML
+Telas que só dependem de pedidos e catálogo: **Vendas Hoje**, **Tarefas**, **Performance**,
+**Análise ABC**, **Produtos** (custo por SKU, importação em massa), **Rentabilidade**,
+**Lucratividade**, **Impostos** (regime, alíquota, comissão da Magalu, frete %),
+**Relatórios**, **Previsões** e **Alertas** (diagnóstico na tela, sem WhatsApp).
+- Migration `20261022120000_magalu_gestao.sql`: `sku_costs`, `account_settings`, `tasks`.
+- Regras únicas em `src/features/magalu/`: `itens.js` (itens do pedido e agregação por SKU),
+  `margem.js` (`calcularMargem` e `curvaAbc`, régua 80/95 da suíte), `useGestaoConfig.js`.
+- **A API não devolve comissão nem frete do pedido**: entram como % informado em Impostos.
+  Sem custo, comissão ou imposto, a margem é INDISPONÍVEL (com o motivo), nunca zero.
+- A receita das telas por SKU soma os ITENS; a de Pedidos/Dashboard soma o total do pedido.
+  Podem divergir se o pedido tiver frete/desconto fora dos itens.
+- Ainda não feito (depende da API conferida): Campanhas/Ads, Promoções, Perguntas,
+  Devoluções, Reclamações, Recebíveis, Estoque Full.
+
 ## Regras que valem aqui (as mesmas do Gestor ML)
 - **Arquitetura de 3 camadas:** página fina (`src/pages`) → `src/features/<x>/` (constantes,
   mapper puro com teste, hook único de fetch) → componentes burros (`src/components/<x>/`).
