@@ -32,8 +32,11 @@ export const MODULOS_BLOQUEADOS = {
   admin: [],
   // Configurações guarda a conexão OAuth da Magalu: só admin.
   financeiro: ['configuracoes'],
-  // Mesma régua do Gestor ML: pedidos mostram valor por transação.
-  colaborador: ['configuracoes', 'pedidos'],
+  // Mesma régua do Gestor ML: telas de valor (pedidos, vendas, margem, impostos) ficam fora.
+  colaborador: [
+    'configuracoes', 'pedidos', 'vendas', 'performance', 'analise-abc',
+    'rentabilidade', 'lucratividade', 'impostos', 'relatorios', 'previsoes',
+  ],
 }
 
 /** Quem enxerga custo, margem, MC, lucro e valores de recebimento. */

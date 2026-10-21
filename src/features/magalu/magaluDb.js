@@ -32,3 +32,21 @@ export async function ultimaSincronizacao(accountId, kind) {
   if (error) return null
   return data
 }
+
+/**
+ * Pedidos da loja num intervalo [desde, ate) por `purchased_at`, com ordem total.
+ * `ate` opcional (sem ele lê até agora). Inclui o payload: os itens vêm dele.
+ */
+export function lerPedidos(accountId, desdeIso, ateIso = null) {
+  return lerTudo('orders', 'order_id, status, purchased_at, total_amount, items_count, payload', (q) => {
+    let f = q.eq('account_id', accountId).gte('purchased_at', desdeIso)
+    if (ateIso) f = f.lt('purchased_at', ateIso)
+    return f.order('purchased_at', { ascending: false }).order('order_id', { ascending: true })
+  })
+}
+
+/** Catálogo (SKUs) da loja, ordenado por SKU. */
+export function lerSkus(accountId) {
+  return lerTudo('skus', 'sku, title, status, price, list_price, stock, image_url, synced_at',
+    (q) => q.eq('account_id', accountId).order('sku', { ascending: true }))
+}
