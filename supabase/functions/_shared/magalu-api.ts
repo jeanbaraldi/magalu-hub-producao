@@ -61,8 +61,9 @@ export function contaDoToken(tokenData: Record<string, unknown>): string | null 
   const candidatos = [
     tokenData.tenant_id, tokenData.tenant,
     claims.tenant_id, claims.tenant, (claims.tenants as unknown[] | undefined)?.[0],
-    claims.sub,
   ]
+  // Sem fallback para `sub`: ele é a PESSOA que logou, não a loja. Duas lojas da mesma
+  // pessoa virariam uma só conta. Sem tenant o magalu-oauth recusa a conexão.
   for (const c of candidatos) {
     const v = typeof c === "object" && c !== null ? (c as Record<string, unknown>).id : c
     const s = String(v ?? "").trim()

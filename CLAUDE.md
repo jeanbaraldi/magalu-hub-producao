@@ -38,16 +38,34 @@ Supabase, schema **`magalu`**, acesso decidido pelo Hub.
 - Função nova = 3 lugares: a pasta, `scripts/functions-list.txt` e `supabase/config.toml`
   (`npm test` confere).
 
-## ⚠️ NÃO VALIDADO contra a documentação oficial da Magalu
-O domínio `developers.magalu.com` estava bloqueado na rede do ambiente em que isto foi
-escrito. Saíram de busca pública e estão isolados em constantes, para corrigir num lugar só:
-- URL de login e token (`id.magalu.com/login`, `id.magalu.com/oauth/token`);
-- escopos (`src/features/magalu/magalu.constants.js`);
-- de onde sai o identificador da loja no token (`contaDoToken` em `_shared/magalu-api.ts`);
-- caminhos `/seller/v1/portfolios/skus` e `/seller/v1/orders` e a paginação `_offset/_limit`;
-- nomes de campo de pedido/SKU e os status (os mappers leem vários caminhos e guardam o
-  payload cru, então corrigir o mapeamento não exige buscar de novo).
-Antes de usar com loja real: conferir cada item acima na doc e rodar uma sincronização.
+## API da Magalu: o que está confirmado e o que não está
+`developers.magalu.com` ficou bloqueado na rede do ambiente; o que segue foi conferido em
+21/10/2026 pelo conteúdo indexado da doc oficial, não lendo a página.
+
+**Confirmado na doc:**
+- login em `id.magalu.com/login` com `choose_tenants=true` (obrigatório para seller), code
+  de uso único válido por 10 min, troca e refresh em `id.magalu.com/oauth/token`, access
+  token de ~2 h (7200 s);
+- o `scope` pedido SOMA aos padrão do app, e os escopos são granulares:
+  `open:portfolio-skus-seller:read`, `open:portfolio-prices-seller:read`,
+  `open:portfolio-stocks-seller:read`, `open:order-order-seller:read`. O app no ID Magalu
+  precisa ter cada um habilitado;
+- base `https://api.magalu.com`; as specs ficam em `developers.magalu.com/apis/orders.openapi.yaml`
+  e `.../products.openapi.yaml`.
+
+**Relatado por integradores, não está na doc indexada:**
+- teto de 5.000 no offset das listas (o sync para como PARCIAL e diz por quê);
+- a loja vem na claim `tenant` do access token. Sem tenant a conexão é recusada; `sub` não
+  serve (é a pessoa, não a loja).
+
+**Ainda aberto, conferir nas specs antes de usar com loja real:**
+- nomes dos parâmetros de paginação (`_offset`/`_limit`) e se a lista de pedidos aceita filtro
+  por data (hoje o sync para quando a página inteira já é mais velha que a janela, o que
+  pressupõe ordem decrescente);
+- campos de pedido e SKU e os status. Preço e estoque têm endpoint próprio
+  (`prices`/`stocks`): se a lista de SKUs não os trouxer, a tela de Anúncios mostra
+  "não informado", nunca zero. Os mappers guardam o payload cru, então corrigir o
+  mapeamento não exige buscar de novo.
 
 ## Comandos
 `npm run dev` · `npm run build` · `npm test` (lista de functions + vitest) ·

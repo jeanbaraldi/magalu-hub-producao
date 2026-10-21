@@ -18,7 +18,10 @@ import { mapPedido, mapSku } from "./logic.ts"
 const CAMINHO_SKUS = "/seller/v1/portfolios/skus"
 const CAMINHO_PEDIDOS = "/seller/v1/orders"
 const LIMITE_PAGINA = 100
-const MAX_PAGINAS = 200
+// A Magalu não aceita offset acima de 5.000 (relatado por integradores, não está na doc
+// indexada): passado o teto a rodada para como PARCIAL, nunca como completa.
+const TETO_OFFSET = 5000
+const MAX_PAGINAS = TETO_OFFSET / LIMITE_PAGINA
 const ORCAMENTO_MS = 110_000
 
 const cors = {
@@ -45,7 +48,7 @@ async function paginar(
     const seguir = await aoReceber(itens)
     if (!seguir || itens.length < LIMITE_PAGINA) return { fetched, truncated: false, error: null }
   }
-  return { fetched, truncated: true, error: null }
+  return { fetched, truncated: true, error: `Teto de ${TETO_OFFSET} registros por paginação atingido; o restante não foi lido` }
 }
 
 async function registrar(supabase: Sb, accountId: string, kind: string, inicio: string, r: Resultado) {

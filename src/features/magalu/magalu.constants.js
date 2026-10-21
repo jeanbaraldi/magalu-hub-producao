@@ -1,15 +1,19 @@
 // Endereços e escopos da API da Magalu (Magalu Open API, ID Magalu).
 //
-// ⚠️ NÃO VALIDADO contra a documentação oficial: developers.magalu.com estava
-// bloqueado pela rede do ambiente quando este arquivo foi escrito. O fluxo
-// (id.magalu.com/login com choose_tenants=true, troca em id.magalu.com/oauth/token)
-// veio do índice público da documentação. Os ESCOPOS são a parte mais incerta:
-// conferir na doc e, se precisar, trocar por VITE_MAGALU_SCOPES sem mexer aqui.
+// Conferido em 21/10/2026 pelo conteúdo indexado de developers.magalu.com (o site
+// estava bloqueado na rede do ambiente; leitura direta da página ainda pendente):
+// - login em id.magalu.com/login, choose_tenants=true para seller, code vale 10 min;
+// - escopos granulares por recurso, um de leitura para cada (Produtos e Pedidos).
+// O `scope` pedido SOMA aos escopos padrão do app: o app precisa ter cada um deles
+// habilitado no ID Magalu, senão o consentimento falha. Troca sem deploy de código
+// por VITE_MAGALU_SCOPES.
 
 export const MAGALU_AUTH_URL = 'https://id.magalu.com/login'
 
 export const MAGALU_ESCOPOS_PADRAO = [
   'openid',
-  'open:portfolio:read',
-  'open:order-order:read',
+  'open:portfolio-skus-seller:read',
+  'open:portfolio-prices-seller:read',
+  'open:portfolio-stocks-seller:read',
+  'open:order-order-seller:read',
 ].join(' ')
