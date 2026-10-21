@@ -148,6 +148,8 @@ export function AppProvider({ children }) {
     if (!code) return
 
     window.history.replaceState({}, '', window.location.pathname + window.location.hash)
+    // Leva para Configurações: é lá que o resultado (e o erro) da conexão aparece.
+    window.location.hash = '#/configuracoes'
     setIsConnecting(true)
     setConnectionError(null)
     try {
