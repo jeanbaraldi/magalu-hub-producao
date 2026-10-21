@@ -14,7 +14,7 @@ import { createClient } from "../_shared/supabase-schema.ts"
 import { cronOuUsuario, naoAutorizado } from "../_shared/cron-auth.ts"
 import { filtrarLojas, lojasDoUsuario, negarLoja, respostaLojaNegada, TODAS } from "../_shared/hub-lojas.ts"
 import { carregarConfig, listaDaResposta, mgGet, tokenValido, type Credencial } from "../_shared/magalu-api.ts"
-import { estoqueDaResposta, mapPedido, mapSku, precoDaResposta } from "./logic.ts"
+import { estoqueDaResposta, mapPedido, mapSku, pedidosMudados, precoDaResposta } from "./logic.ts"
 
 const CAMINHO_SKUS = "/seller/v1/portfolios/skus"
 const CAMINHO_PEDIDOS = "/seller/v1/orders"
@@ -135,7 +135,16 @@ async function syncPedidos(supabase: Sb, cred: Credencial, token: string, prazo:
   // updated_at pega pedido novo E mudança de status (cancelamento, entrega) de pedido antigo.
   const filtros = { updated_at__gte: dataApi(Date.now() - dias * 86_400_000), _sort: "purchased_at:desc" }
   const r = await paginar(token, CAMINHO_PEDIDOS, prazo, filtros, async (itens) => {
-    const linhas = itens.map((p) => mapPedido(cred.account_id, p, inicio)).filter((l) => l !== null)
+    const lidas = itens.map((p) => mapPedido(cred.account_id, p, inicio)).filter((l) => l !== null)
+    let linhas = lidas
+    if (lidas.length) {
+      const { data: gravados, error: erroLeitura } = await supabase.from("orders")
+        .select("order_id, updated_at:payload->>updated_at")
+        .eq("account_id", cred.account_id)
+        .in("order_id", lidas.map((l) => l.order_id))
+      // Falha ao ler o que já está gravado não vira "nada mudou": grava tudo, como antes.
+      if (!erroLeitura) linhas = pedidosMudados(lidas, new Map((gravados ?? []).map((g) => [String(g.order_id), g.updated_at ?? null])))
+    }
     if (linhas.length) {
       const { error } = await supabase.from("orders").upsert(linhas, { onConflict: "account_id,order_id" })
       if (error) throw new Error(`Falha ao gravar pedidos: ${error.message}`)

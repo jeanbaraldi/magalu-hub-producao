@@ -12,7 +12,8 @@ const ultimoSyncPorConta = new Map()
 
 /**
  * Único ponto de fetch de Vendas Hoje "ao vivo":
- * - puxa pedidos novos da Magalu (magalu-sync, só hoje) ao abrir e a cada 2 min;
+ * - puxa pedidos novos da Magalu (magalu-sync, só hoje) ao abrir; a busca contínua é
+ *   do cron de 1 minuto, e o botão Atualizar força;
  * - assina o Realtime de magalu.orders e relê assim que o sync grava;
  * - relê o espelho a cada 30 s como rede de segurança.
  * Tudo é limpo ao desmontar ou trocar de loja.
@@ -71,8 +72,7 @@ export function useVendasHojeData() {
     if (!contaId) return undefined
     sincronizar()
     const leitura = setInterval(carregar, REFRESH_MS)
-    const puxar = setInterval(() => sincronizar(), SYNC_MS)
-    return () => { clearInterval(leitura); clearInterval(puxar) }
+    return () => clearInterval(leitura)
   }, [carregar, sincronizar, contaId])
 
   // Realtime: pedido gravado pelo sync (da tela ou do cron) repinta em segundos.

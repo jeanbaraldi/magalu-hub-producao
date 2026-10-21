@@ -15,6 +15,21 @@ select cron.schedule('magalu-sync-pedidos', '*/30 * * * *', $$
     timeout_milliseconds := 150000);
 $$);
 
+-- Ao vivo: pedidos do dia a cada minuto (o mínimo do pg_cron). Cada rodada leva poucos
+-- segundos e só grava pedido que mudou, então o Realtime só dispara com venda nova.
+-- O job de 30 min acima segue como rede de segurança dos 3 últimos dias.
+select cron.unschedule(jobid) from cron.job where jobname = 'magalu-sync-pedidos-ao-vivo';
+select cron.schedule('magalu-sync-pedidos-ao-vivo', '* * * * *', $$
+  select net.http_post(
+    url := '__SUPABASE_URL__/functions/v1/magalu-sync',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer __ANON_KEY__',
+      'x-cron-secret', (select value from magalu.app_config where key = 'CRON_SECRET')),
+    body := '{"cron": true, "kind": "orders", "days": 1}'::jsonb,
+    timeout_milliseconds := 55000);
+$$);
+
 select cron.unschedule(jobid) from cron.job where jobname = 'magalu-sync-skus';
 select cron.schedule('magalu-sync-skus', '15 9 * * *', $$
   select net.http_post(

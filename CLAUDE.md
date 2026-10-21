@@ -31,9 +31,11 @@ Telas que só dependem de pedidos e catálogo: **Vendas Hoje**, **Tarefas**, **P
 ## Vendas Hoje "ao vivo" (24/10/2026)
 Mesmo formato do Ao vivo da Shopee: cabeçalho azul com receita do dia, variação vs ontem até a
 mesma hora, tiles Pedidos/Unidades/Ticket/Última venda, e barras por hora Passado/Agora/Futuro.
-- **Ao vivo de verdade:** com a tela aberta, `useVendasHojeData` chama o `magalu-sync`
-  (`kind: orders`, `days: 1`) ao abrir e a cada 2 min (o cron só roda a cada 30 min); o botão
-  Atualizar força a busca. Throttle por loja em memória do módulo, sem sobrepor buscas.
+- **Ao vivo de verdade:** cron `magalu-sync-pedidos-ao-vivo` busca os pedidos do dia a cada
+  minuto (o de 30 min segue como rede de segurança dos 3 dias). O sync só grava pedido cujo
+  `updated_at` mudou (`pedidosMudados`), então o Realtime só dispara com venda nova. A tela
+  ainda busca ao abrir (throttle de 2 min por loja) e o botão Atualizar força.
+- O card da Magalu na Visão geral do Hub ouve o mesmo Realtime (`TABELAS_AO_VIVO` do Hub).
 - **Realtime** em `magalu.orders` (migration `20261024120000`): pedido gravado pelo sync repinta
   em ~1,5 s. A releitura do espelho a cada 30 s é a rede de segurança se a publicação faltar.
 - Erro do sync vem DENTRO de um 200 por loja (`erroDoSync`): a tela diz e segue mostrando o espelho.
