@@ -1,0 +1,3 @@
+# Edge functions do Gestor Magalu (deploy). Mesma lista em supabase/config.toml.
+magalu-oauth
+magalu-sync

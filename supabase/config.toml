@@ -1,0 +1,17 @@
+# Gestor Magalu — banco unificado da suíte (mesmo projeto do Hub, schema `magalu`).
+project_id = "gestormagalu"
+
+[api]
+enabled = true
+# O schema `magalu` precisa estar exposto na API do projeto (Settings → API → Exposed schemas).
+# Nunca expor hub_private nem vault.
+schemas = ["public", "graphql_public", "hub", "magalu"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+# ─── Edge functions ───
+# O gate real é dentro da função (sessão de usuário ou segredo do cron).
+[functions.magalu-oauth]
+verify_jwt = false
+[functions.magalu-sync]
+verify_jwt = false

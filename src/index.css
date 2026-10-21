@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    @apply bg-slate-50 text-slate-900 font-sans antialiased;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-400;
+  }
+
+  /* Respect user's reduced-motion preference globally.
+     Disables CSS animations, transitions and smooth-scroll across the app
+     without requiring per-component motion-reduce: variants. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ── Impressão / Exportar PDF (ex.: /relatorios) ─────────────────────────────
+   window.print() → usuário escolhe "Salvar como PDF". Paisagem acomoda os
+   gráficos (recharts mantém a largura da tela no snapshot de impressão). */
+@page {
+  size: A4 landscape;
+  margin: 10mm;
+}
+
+@media print {
+  body {
+    background: #fff !important;
+  }
+  /* Sidebar (desktop + drawer) e reserva de coluna fora do papel */
+  aside {
+    display: none !important;
+  }
+  /* Conteúdo principal ocupa a página inteira e pagina (sem clipping) */
+  main#main-content {
+    overflow: visible !important;
+    padding-top: 0 !important;
+  }
+  /* Sem hover/sombras no papel */
+  * {
+    box-shadow: none !important;
+  }
+}

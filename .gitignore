@@ -1,0 +1,53 @@
+node_modules
+dist/
+.vercel
+.env.local
+.env*.local
+/.worktrees/
+
+# macOS metadata
+.DS_Store
+**/.DS_Store
+
+# Claude Code — arquivos locais (settings compartilhado é launch.json)
+.claude/settings.local.json
+.claude/skills/*
+# exceto skills de processo do projeto (versionadas de proposito, como os hooks):
+!.claude/skills/pacote-atualizacao/
+.mcp.json
+
+# Relatórios exportados
+*.xlsx
+
+# Documentação interna de processo — em geral NÃO versionar (planos, dumps de migração, etc.)
+# EXCEÇÃO: devops-update/Hand-offs/ FICA versionado — continuidade de handoff entre ambientes
+# (local ↔ Claude Code web), conforme o processo do CLAUDE.md (§ Specs & Hand-off).
+devops-update/*
+!devops-update/Hand-offs/
+docs/superpowers/
+
+# supabase CLI workspace — versionar migrations + functions distribuíveis + config;
+# ignorar workspace/temp/symlinks do CLI e as functions fora do v1 (tiny-*, login-request)
+supabase/.branches/
+supabase/.temp/
+supabase/.env
+supabase/functions/tiny-fetch-orders/
+supabase/functions/tiny-oauth-callback/
+supabase/functions/tiny-refresh-order/
+supabase/functions/tiny-revert-order/
+supabase/functions/tiny-webhook/
+supabase/functions/login-request/
+
+# Grafo gerado pelo /graphify (artefato local, ~5MB — regenerável)
+graphify-out/
+
+# indice local do codegraph (cerebro do nia-devhub) — nunca versionar
+.codegraph/
+
+# Lockfile gerado pelo Deno ao rodar os testes das edge functions — nao versionado.
+deno.lock
+
+# Conexao local da extensao (gerada por extension/gerar-conexao.sh) — NUNCA versionar
+extension/src/config.local.js
+extension/src/config.local.json
+.env.production

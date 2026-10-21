@@ -1,0 +1,153 @@
+/* Login — "midnight terminal" (ref. Krea) com o azul da Magalu como único acento.
+   Tudo em CSS: zero dependência. Variáveis --mx/--my (px) e --nx/--ny (-1..1) vêm do
+   ponteiro, gravadas direto no DOM pelo LoginShell (sem re-render). */
+
+.login-root {
+  --ml: #0086ff;
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  isolation: isolate;
+  background: #000;
+}
+
+/* Holofote que segue o cursor */
+.login-spot {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    640px circle at var(--mx, 50%) var(--my, 35%),
+    rgba(0, 134, 255, 0.13),
+    transparent 60%
+  );
+}
+
+/* Orbes de luz à deriva, com paralaxe */
+.login-orbs {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  transform: translate3d(calc(var(--nx, 0) * -28px), calc(var(--ny, 0) * -20px), 0);
+  transition: transform 0.4s ease-out;
+}
+.login-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  will-change: transform;
+}
+.login-orb--a {
+  width: 520px;
+  height: 520px;
+  left: -140px;
+  top: -160px;
+  background: var(--ml);
+  opacity: 0.2;
+  animation: login-drift-a 24s ease-in-out infinite alternate;
+}
+.login-orb--b {
+  width: 460px;
+  height: 460px;
+  right: -120px;
+  bottom: -140px;
+  background: #ff9a00;
+  opacity: 0.16;
+  animation: login-drift-b 30s ease-in-out infinite alternate;
+}
+@keyframes login-drift-a {
+  to { transform: translate3d(180px, 120px, 0) scale(1.15); }
+}
+@keyframes login-drift-b {
+  to { transform: translate3d(-160px, -90px, 0) scale(1.2); }
+}
+
+/* Piso em perspectiva 3D correndo em direção a quem olha */
+.login-floor {
+  position: absolute;
+  left: -50%;
+  right: -50%;
+  bottom: -6%;
+  height: 1100px;
+  z-index: -2;
+  pointer-events: none;
+  transform-origin: 50% 100%;
+  transform: perspective(900px) rotateX(58deg);
+  background-image:
+    linear-gradient(rgba(0, 134, 255, 0.42) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 134, 255, 0.42) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 78%);
+  mask-image: linear-gradient(to top, #000 0%, transparent 78%);
+  animation: login-floor 5s linear infinite;
+}
+@keyframes login-floor {
+  to { background-position: 0 64px, 0 0; }
+}
+
+/* Vinheta: escurece as bordas, foco no centro */
+.login-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.75) 100%);
+}
+
+/* Card de vidro que inclina em 3D com o ponteiro */
+.login-stage {
+  perspective: 1100px;
+}
+.login-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 32px;
+  background: rgba(255, 255, 255, 0.04);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.09),
+    0 40px 90px -30px rgba(0, 0, 0, 0.9),
+    0 0 90px -35px rgba(0, 134, 255, 0.4);
+  transform: rotateX(calc(var(--ny, 0) * -5deg)) rotateY(calc(var(--nx, 0) * 7deg));
+  transition: transform 0.25s ease-out;
+  animation: login-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+/* Reflexo que acompanha o cursor */
+.login-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    380px circle at calc(50% + var(--nx, 0) * 50%) calc(50% + var(--ny, 0) * 50%),
+    rgba(255, 255, 255, 0.07),
+    transparent 60%
+  );
+}
+/* Ao digitar, o card fica firme */
+.login-card:focus-within {
+  transform: none;
+}
+@keyframes login-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.98); }
+}
+
+.login-copy {
+  animation: login-in 0.8s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (max-width: 1023px), (pointer: coarse) {
+  .login-card { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-orb,
+  .login-floor,
+  .login-card,
+  .login-copy { animation: none; }
+  .login-card,
+  .login-orbs { transform: none; transition: none; }
+}
