@@ -28,7 +28,9 @@ Telas que só dependem de pedidos e catálogo: **Vendas Hoje**, **Tarefas**, **P
   cancelada, a tarifa é desconhecida e o item conta em `itensSemComissao`.
 - **Frete do vendedor não vem nos pedidos**: `amounts.freight` é o que o COMPRADOR pagou e
   `freight.shared` veio vazio em todos os pedidos. O custo real de frete por pedido só existe
-  na API `financial-analysis` (escopo próprio, ainda não habilitado); até lá vale o % de Impostos.
+  na API `financial-analysis` (escopo `open:order-financial-report-seller:read`, AVAILABLE no
+  client desde 22/10/2026 e pedido no login; cada loja precisa reconectar para o token ter o
+  escopo). Enquanto a leitura não existir, vale o % de Impostos.
   Frete fica como % informado. Sem custo, comissão ou imposto, a margem é INDISPONÍVEL
   (com o motivo), nunca zero.
 - A receita das telas por SKU soma os ITENS; a de Pedidos/Dashboard soma o total do pedido.
