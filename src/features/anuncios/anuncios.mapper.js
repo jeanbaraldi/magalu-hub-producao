@@ -94,10 +94,13 @@ export function tarifaFixaDaLoja(vendas) {
 export function margemUnitaria(row, { custo, cfg, venda, podeVerValores, tarifaLoja = null, real = null }) {
   if (!podeVerValores) return { bloqueado: true }
   if (row.preco == null) return { mc: null, mcPct: null, faltando: ['preço do anúncio'], linhas: null }
+  // Comissão: vendas dos últimos 30 dias do SKU > análise financeira de 12 meses (do SKU, ou
+  // média da loja para SKU que nunca vendeu) > % configurado em Impostos.
   const taxaReal = taxaComissaoObservada(venda)
+  const taxaHist = real?.comissaoPct ?? null
   const taxaCfg = cfg?.commission_pct == null || !Number.isFinite(Number(cfg.commission_pct)) ? null : Number(cfg.commission_pct) / 100
-  const taxa = taxaReal ?? taxaCfg
-  const fonte = taxaReal != null ? 'magalu' : taxaCfg != null ? 'percentual' : null
+  const taxa = taxaReal ?? taxaHist ?? taxaCfg
+  const fonte = taxaReal != null ? 'magalu' : taxaHist != null ? (real.comissaoDaLoja ? 'loja' : 'historico') : taxaCfg != null ? 'percentual' : null
   const tarifaSku = tarifaFixaObservada(venda)
   const tarifa = tarifaSku ?? tarifaLoja
   const fonteTarifa = tarifaSku != null ? 'sku' : tarifaLoja != null ? 'loja' : null

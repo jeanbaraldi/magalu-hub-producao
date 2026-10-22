@@ -21,7 +21,7 @@ export default function Lucratividade() {
   const visiveis = useMemo(() => filtrarLucratividade(rows, { busca, faixa }), [rows, busca, faixa])
   const semCusto = useMemo(() => rows.filter((r) => r.custoUnit == null).length, [rows])
   const comissaoCompleta = useMemo(() => rows.length > 0 && rows.every((r) => r.itensSemComissao === 0), [rows])
-  const freteMedido = useMemo(() => rows.some((r) => r.fonteFrete === 'magalu'), [rows])
+  const freteMedido = useMemo(() => rows.some((r) => r.fonteFrete === 'magalu' || r.fonteFrete === 'estimado'), [rows])
 
   if (!isConnected) {
     return (

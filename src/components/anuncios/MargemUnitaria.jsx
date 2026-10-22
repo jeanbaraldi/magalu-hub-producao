@@ -25,9 +25,10 @@ export default function MargemUnitaria({ margem }) {
   const legenda = margem.mc != null
     ? 'por unidade, no preço atual'
     : semCusto ? 'cadastre o custo para calcular' : `falta: ${margem.faltando.join(', ')}`
-  const comissaoRotulo = l?.comissao?.fonte === 'magalu'
+  const comissaoRotulo = l?.comissao?.fonte === 'magalu' || l?.comissao?.fonte === 'historico'
     ? `Comissão Magalu (${pct(l.comissao.pct)})`
-    : l?.comissao?.pct != null ? `Comissão (${pct(l.comissao.pct)} configurada)` : 'Comissão Magalu'
+    : l?.comissao?.fonte === 'loja' ? `Comissão Magalu (${pct(l.comissao.pct)} média da loja)`
+      : l?.comissao?.pct != null ? `Comissão (${pct(l.comissao.pct)} configurada)` : 'Comissão Magalu'
   const linhas = l ? [
     { id: 'comissao', rotulo: comissaoRotulo, valor: l.comissao.valor, vazio: '—' },
     {
@@ -38,7 +39,8 @@ export default function MargemUnitaria({ margem }) {
     },
     {
       id: 'frete',
-      rotulo: l.frete.fonte === 'magalu' ? 'Frete cobrado pela Magalu (média 60d)'
+      rotulo: l.frete.fonte === 'magalu' ? 'Frete cobrado pela Magalu (média 12m)'
+        : l.frete.fonte === 'estimado' ? 'Frete estimado (média da loja)'
         : l.frete.pct != null ? `Frete (${pct(l.frete.pct)} configurado)` : 'Frete',
       valor: l.frete.valor,
       vazio: 'não configurado',

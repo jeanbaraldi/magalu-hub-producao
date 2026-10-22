@@ -1,7 +1,7 @@
 // magalu-sync: espelha SKUs e pedidos de cada loja Magalu nas tabelas do schema `magalu`.
 //
 // Entrada (POST JSON):
-//   { account_id?, kind?: "skus" | "orders" | "financeiro" | "all", days?: number }   -> tela (sessão)
+//   { account_id?, kind?: "skus" | "orders" | "financeiro" | "all", days?: number, skip_days?: number }   -> tela (sessão)
 //   { cron: true, kind?, days? } + header x-cron-secret                -> pg_cron, todas as lojas
 // Cada rodada grava uma linha em magalu.sync_runs (o que trouxe, se truncou, qual erro).
 // Orçamento de 110s (o Edge corta em ~150s): o que não coube fica marcado como truncado.
@@ -161,11 +161,11 @@ async function syncPedidos(supabase: Sb, cred: Credencial, token: string, prazo:
  * A API exige um par de datas com no máximo 15 dias: o período é lido em janelas.
  * updated_at pega transação nova de pedido antigo (repasse, estorno).
  */
-async function syncFinanceiro(supabase: Sb, cred: Credencial, token: string, prazo: number, dias: number): Promise<Resultado> {
+async function syncFinanceiro(supabase: Sb, cred: Credencial, token: string, prazo: number, dias: number, pularDias = 0): Promise<Resultado> {
   const inicio = new Date().toISOString()
   let total: Resultado = { fetched: 0, truncated: false, error: null }
   let descartadas = 0
-  for (const j of janelas15Dias(dias, Date.now())) {
+  for (const j of janelas15Dias(dias, Date.now() - pularDias * 86_400_000)) {
     if (Date.now() > prazo) { total = { ...total, truncated: true }; break }
     const filtros = { updated_at__gte: dataApi(j.de), updated_at__lte: dataApi(j.ate) }
     const r = await paginar(token, CAMINHO_FINANCEIRO, prazo, filtros, async (itens) => {
@@ -202,7 +202,10 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "")
   const kind: string = ["skus", "orders", "financeiro"].includes(body.kind) ? body.kind : "all"
-  const dias = Math.min(Math.max(Number(body.days) || 30, 1), 90)
+  // Financeiro aceita histórico mais longo (backfill em partes com `skip_days`).
+  const diasMax = kind === "financeiro" ? 365 : 90
+  const dias = Math.min(Math.max(Number(body.days) || 30, 1), diasMax)
+  const pularDias = Math.min(Math.max(Number(body.skip_days) || 0, 0), 730)
   const prazo = Date.now() + ORCAMENTO_MS
 
   let q = supabase.from("magalu_credentials").select("*")
@@ -220,7 +223,7 @@ Deno.serve(async (req) => {
       const r: Record<string, unknown> = { account_id: cred.account_id }
       if (kind === "all" || kind === "skus") r.skus = await syncSkus(supabase, cred, token, prazo)
       if (kind === "all" || kind === "orders") r.orders = await syncPedidos(supabase, cred, token, prazo, dias)
-      if (kind === "financeiro") r.financeiro = await syncFinanceiro(supabase, cred, token, prazo, dias)
+      if (kind === "financeiro") r.financeiro = await syncFinanceiro(supabase, cred, token, prazo, dias, pularDias)
       saida.push(r)
     } catch (e) {
       // Uma loja que falha não derruba as outras.
