@@ -132,9 +132,11 @@ seller e módulo; teto de 5.000 no offset relatado por integradores (o sync para
 **Telas que faltam e as specs delas:** Campanhas (`campaign.ads`, `metric.ads`,
 `financial.ads`), Promoções (`promotions`), Perguntas (`questions`, em `services.magalu.com`),
 Devoluções/Reclamações (`sac.yaml`), Recebíveis (`financial-analysis`: CREDIT soma, DEBIT
-subtrai, INFORMATIVE fora, janela máx. 15 dias), Estoque fulfillment (`stock`). Cada uma pede
-escopo próprio: só acrescentar o escopo junto da tela, porque escopo não habilitado no app
-pode derrubar o login.
+subtrai, INFORMATIVE fora, janela máx. 15 dias), Estoque fulfillment (`stock`).
+**Escopos (22/10/2026):** os de leitura dessas telas já estão AVAILABLE no client e pedidos no
+login (`MAGALU_ESCOPOS_PADRAO`); a lista certa sai de `idm scope list` (singular). **Magalu Ads
+não existe no catálogo do IDM**: `add-scope` com `open:ads-*` responde "do not belong to a
+public API product". Escopo que o client não tem derruba o login: confira antes de acrescentar.
 
 ## Comandos
 `npm run dev` · `npm run build` · `npm test` (lista de functions + vitest) ·
