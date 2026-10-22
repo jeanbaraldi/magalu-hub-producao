@@ -1,7 +1,7 @@
 // magalu-sync: espelha SKUs e pedidos de cada loja Magalu nas tabelas do schema `magalu`.
 //
 // Entrada (POST JSON):
-//   { account_id?, kind?: "skus" | "orders" | "all", days?: number }   -> tela (sessão)
+//   { account_id?, kind?: "skus" | "orders" | "financeiro" | "all", days?: number }   -> tela (sessão)
 //   { cron: true, kind?, days? } + header x-cron-secret                -> pg_cron, todas as lojas
 // Cada rodada grava uma linha em magalu.sync_runs (o que trouxe, se truncou, qual erro).
 // Orçamento de 110s (o Edge corta em ~150s): o que não coube fica marcado como truncado.
@@ -14,10 +14,11 @@ import { createClient } from "../_shared/supabase-schema.ts"
 import { cronOuUsuario, naoAutorizado } from "../_shared/cron-auth.ts"
 import { filtrarLojas, lojasDoUsuario, negarLoja, respostaLojaNegada, TODAS } from "../_shared/hub-lojas.ts"
 import { carregarConfig, listaDaResposta, mgGet, tokenValido, type Credencial } from "../_shared/magalu-api.ts"
-import { estoqueDaResposta, mapPedido, mapSku, pedidosMudados, precoDaResposta } from "./logic.ts"
+import { estoqueDaResposta, janelas15Dias, mapPedido, mapSku, mapTransacoes, pedidosMudados, precoDaResposta } from "./logic.ts"
 
 const CAMINHO_SKUS = "/seller/v1/portfolios/skus"
 const CAMINHO_PEDIDOS = "/seller/v1/orders"
+const CAMINHO_FINANCEIRO = "/seller/v1/financial-analysis/orders"
 const LIMITE_PAGINA = 100
 // SKUs aceitam no máximo 100 por página (spec). Teto de offset 5.000 (relatado por
 // integradores, não está na spec): passado o teto a rodada para como PARCIAL.
@@ -155,6 +156,40 @@ async function syncPedidos(supabase: Sb, cred: Credencial, token: string, prazo:
   return r
 }
 
+/**
+ * Análise financeira dos pedidos ATUALIZADOS nos últimos `dias` (frete real, MDR, tarifas).
+ * A API exige um par de datas com no máximo 15 dias: o período é lido em janelas.
+ * updated_at pega transação nova de pedido antigo (repasse, estorno).
+ */
+async function syncFinanceiro(supabase: Sb, cred: Credencial, token: string, prazo: number, dias: number): Promise<Resultado> {
+  const inicio = new Date().toISOString()
+  let total: Resultado = { fetched: 0, truncated: false, error: null }
+  let descartadas = 0
+  for (const j of janelas15Dias(dias, Date.now())) {
+    if (Date.now() > prazo) { total = { ...total, truncated: true }; break }
+    const filtros = { updated_at__gte: dataApi(j.de), updated_at__lte: dataApi(j.ate) }
+    const r = await paginar(token, CAMINHO_FINANCEIRO, prazo, filtros, async (itens) => {
+      const linhas = []
+      for (const p of itens) {
+        const m = mapTransacoes(cred.account_id, p, inicio)
+        linhas.push(...m.linhas)
+        descartadas += m.descartadas
+      }
+      for (let i = 0; i < linhas.length; i += 500) {
+        const { error } = await supabase.from("financial_transactions")
+          .upsert(linhas.slice(i, i + 500), { onConflict: "account_id,order_code,identifier" })
+        if (error) throw new Error(`Falha ao gravar transações: ${error.message}`)
+      }
+      return true
+    })
+    total = { fetched: total.fetched + r.fetched, truncated: total.truncated || r.truncated, error: total.error ?? r.error }
+    if (r.error) break
+  }
+  if (descartadas > 0) total = { ...total, truncated: true, error: total.error ?? `${descartadas} transação(ões) ilegível(is) descartada(s)` }
+  await registrar(supabase, cred.account_id, "financeiro", inicio, total)
+  return total
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors })
   const body = await req.json().catch(() => ({}))
@@ -165,7 +200,7 @@ Deno.serve(async (req) => {
   if (negarLoja(lojas, body.account_id)) return respostaLojaNegada(cors)
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "")
-  const kind: string = ["skus", "orders"].includes(body.kind) ? body.kind : "all"
+  const kind: string = ["skus", "orders", "financeiro"].includes(body.kind) ? body.kind : "all"
   const dias = Math.min(Math.max(Number(body.days) || 30, 1), 90)
   const prazo = Date.now() + ORCAMENTO_MS
 
@@ -182,8 +217,9 @@ Deno.serve(async (req) => {
     try {
       const token = await tokenValido(supabase, cred, config)
       const r: Record<string, unknown> = { account_id: cred.account_id }
-      if (kind !== "orders") r.skus = await syncSkus(supabase, cred, token, prazo)
-      if (kind !== "skus") r.orders = await syncPedidos(supabase, cred, token, prazo, dias)
+      if (kind === "all" || kind === "skus") r.skus = await syncSkus(supabase, cred, token, prazo)
+      if (kind === "all" || kind === "orders") r.orders = await syncPedidos(supabase, cred, token, prazo, dias)
+      if (kind === "financeiro") r.financeiro = await syncFinanceiro(supabase, cred, token, prazo, dias)
       saida.push(r)
     } catch (e) {
       // Uma loja que falha não derruba as outras.

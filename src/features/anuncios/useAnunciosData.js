@@ -72,8 +72,8 @@ export function useAnunciosData() {
   // Papel que falhou ao ler não esconde custos que a RLS já entregou: a trava é o banco.
   const podeVerValores = gestao.podeVerValores || gestao.custos.size > 0
   const rows = useMemo(
-    () => (daConta ? enriquecerSkus(estado.skus, { vendas: estado.vendas, custos: gestao.custos, cfg: gestao.cfg, podeVerValores }) : []),
-    [daConta, estado, gestao.custos, gestao.cfg, podeVerValores],
+    () => (daConta ? enriquecerSkus(estado.skus, { vendas: estado.vendas, custos: gestao.custos, cfg: gestao.cfg, reais: gestao.reais, podeVerValores }) : []),
+    [daConta, estado, gestao.custos, gestao.cfg, gestao.reais, podeVerValores],
   )
   const resumo = useMemo(() => mapSkusResumo(rows), [rows])
   const syncAtual = sync.conta === contaId

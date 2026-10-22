@@ -7,7 +7,7 @@ import { Lock, AlertTriangle } from 'lucide-react'
  * `comissaoCompleta`: a Magalu informou a comissão de todo item vendido (aí o % não faz falta).
  * @param {{ podeVerValores:boolean, cfg:object|null, semCusto?:number, comissaoCompleta?:boolean, loading?:boolean }} props
  */
-export default function AvisoMargem({ podeVerValores, cfg, semCusto = 0, comissaoCompleta = false, loading }) {
+export default function AvisoMargem({ podeVerValores, cfg, semCusto = 0, comissaoCompleta = false, freteMedido = false, loading }) {
   if (loading) return null
   if (!podeVerValores) {
     return (
@@ -19,7 +19,8 @@ export default function AvisoMargem({ podeVerValores, cfg, semCusto = 0, comissa
   }
   const semComissao = cfg?.commission_pct == null && !comissaoCompleta
   const semImposto = cfg?.tax_pct == null
-  const semFrete = cfg?.freight_pct == null
+  // Com frete medido na Magalu o % configurado só cobre SKU sem medição: não é aviso.
+  const semFrete = cfg?.freight_pct == null && !freteMedido
   if (!semComissao && !semImposto && semCusto === 0 && !semFrete) return null
   return (
     <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">

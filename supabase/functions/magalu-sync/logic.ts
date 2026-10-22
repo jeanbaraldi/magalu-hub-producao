@@ -194,3 +194,82 @@ const NAO_VENDA = new Set(["new", "cancelled", "canceled", "cancelado", "unpaid"
 export function pedidoContaComoVenda(status: string | null): boolean {
   return !!status && !NAO_VENDA.has(status.toLowerCase())
 }
+
+export type LinhaTransacao = {
+  account_id: string; order_code: string; identifier: string; order_date: string | null
+  type: string; category: string | null; subcategory: string | null; value: number
+  sku: string | null; quantity: number | null; entity_id: string | null; delivery_id: string | null
+  status: string | null; description: string | null; batch_id: string | null
+  transaction_at: string | null; synced_at: string
+}
+
+const TIPOS = new Set(["CREDIT", "DEBIT", "INFORMATIVE"])
+
+/**
+ * Um pedido da análise financeira (GET /seller/v1/financial-analysis/orders) → linhas de
+ * transação. Valor em reais (value ÷ normalizer); sem normalizer ou tipo desconhecido a
+ * transação é descartada e contada em `descartadas` (nunca vira zero).
+ * O frete compartilhado vem SEM sku: resolvido pelo id do item (entity.id) nas outras
+ * transações do mesmo pedido.
+ */
+export function mapTransacoes(accountId: string, pedido: unknown, agora: string): { linhas: LinhaTransacao[]; descartadas: number } {
+  if (!ehObj(pedido)) return { linhas: [], descartadas: 0 }
+  const extras = ehObj(pedido.extras) ? pedido.extras : {}
+  const orderCode = texto(extras.order_code) ?? texto(pedido.external_id)
+  const txs = Array.isArray(pedido.transactions) ? pedido.transactions.filter(ehObj) : []
+  if (!orderCode) return { linhas: [], descartadas: txs.length }
+  const orderDate = dataIso(extras.order_date ?? pedido.created_at)
+
+  const skuDoItem = new Map<string, string>()
+  for (const t of txs) {
+    const ent = ehObj(t.entity) ? t.entity : null
+    const sku = ent && ehObj(ent.extras) ? texto(ent.extras.sku) : null
+    const id = ent ? texto(ent.id) : null
+    if (id && sku) skuDoItem.set(id, sku)
+  }
+
+  const porId = new Map<string, LinhaTransacao>()
+  let descartadas = 0
+  for (const t of txs) {
+    const tipo = String(t.type ?? "").toUpperCase()
+    const valor = dinheiro({ value: t.value, normalizer: t.normalizer })
+    const identifier = texto(t.identifier)
+    if (!TIPOS.has(tipo) || valor === null || !identifier) { descartadas++; continue }
+    const ent = ehObj(t.entity) ? t.entity : null
+    const ex = ent && ehObj(ent.extras) ? ent.extras : {}
+    const entityId = ent ? texto(ent.id) : null
+    const ehItem = !ent || String(ent.type ?? "ITEM").toUpperCase() === "ITEM"
+    porId.set(identifier, {
+      account_id: accountId,
+      order_code: orderCode,
+      identifier,
+      order_date: orderDate,
+      type: tipo,
+      category: texto(t.category),
+      subcategory: texto(t.subcategory),
+      value: Math.abs(valor),
+      sku: texto(ex.sku) ?? (ehItem && entityId ? skuDoItem.get(entityId) ?? null : null),
+      quantity: inteiro(ex.quantity),
+      entity_id: entityId,
+      delivery_id: texto(ex.delivery_id),
+      status: texto(t.status),
+      description: texto(t.description),
+      batch_id: texto(t.batch_id),
+      transaction_at: dataIso(t.transaction_at),
+      synced_at: agora,
+    })
+  }
+  return { linhas: [...porId.values()], descartadas }
+}
+
+/**
+ * Janelas de no máximo 15 dias (limite da API), da mais recente para a mais antiga,
+ * cobrindo [agora − dias, agora].
+ */
+export function janelas15Dias(dias: number, agoraMs: number): { de: number; ate: number }[] {
+  const PASSO = 15 * 86_400_000 - 1000
+  const inicio = agoraMs - dias * 86_400_000
+  const out: { de: number; ate: number }[] = []
+  for (let ate = agoraMs; ate > inicio; ate -= PASSO) out.push({ de: Math.max(inicio, ate - PASSO), ate })
+  return out
+}

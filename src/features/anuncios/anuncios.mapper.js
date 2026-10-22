@@ -3,7 +3,7 @@
  * página de Anúncios do Gestor ML: preço, vendas 30d, estoque e margem de contribuição
  * por unidade no preço atual.
  */
-import { calcularMargem } from '../magalu/margem'
+import { calcularMargem, custoRealDoSku } from '../magalu/margem'
 import { STATUS_SKU, ESTOQUE_BAIXO } from './anuncios.constants'
 
 const ATIVOS = new Set(['active', 'ativo', 'published'])
@@ -91,7 +91,7 @@ export function tarifaFixaDaLoja(vendas) {
  * unidade (observada no SKU, ou a média da loja). Tarifa não medida fica de fora e a linha
  * diz isso. Sem acesso a valores (RLS esconde custos), devolve `bloqueado`.
  */
-export function margemUnitaria(row, { custo, cfg, venda, podeVerValores, tarifaLoja = null }) {
+export function margemUnitaria(row, { custo, cfg, venda, podeVerValores, tarifaLoja = null, real = null }) {
   if (!podeVerValores) return { bloqueado: true }
   if (row.preco == null) return { mc: null, mcPct: null, faltando: ['preço do anúncio'], linhas: null }
   const taxaReal = taxaComissaoObservada(venda)
@@ -105,7 +105,7 @@ export function margemUnitaria(row, { custo, cfg, venda, podeVerValores, tarifaL
   const comissao = comissaoPct == null ? null : comissaoPct + (tarifa ?? 0)
   const r = calcularMargem(
     { receita: row.preco, unidades: 1, comissao, itensSemComissao: comissao == null ? 1 : 0 },
-    custo, { ...cfg, commission_pct: null },
+    custo, { ...cfg, commission_pct: null }, real,
   )
   return {
     mc: r.mc,
@@ -115,7 +115,8 @@ export function margemUnitaria(row, { custo, cfg, venda, podeVerValores, tarifaL
     linhas: {
       comissao: { valor: comissaoPct, pct: taxa == null ? null : taxa * 100, fonte },
       tarifa: { valor: comissao == null ? null : tarifa, fonte: fonteTarifa },
-      frete: { valor: r.componentes.frete, pct: cfg?.freight_pct ?? null },
+      frete: { valor: r.componentes.frete, pct: cfg?.freight_pct ?? null, fonte: r.fonteFrete },
+      mdr: { valor: r.componentes.mdr, pct: real?.mdrPct == null ? null : real.mdrPct * 100, daLoja: real != null && !(real.unidadesMedidas > 0) },
       custo: { valor: r.componentes.custo },
       imposto: { valor: r.componentes.imposto, pct: cfg?.tax_pct ?? null },
     },
@@ -126,7 +127,7 @@ export function margemUnitaria(row, { custo, cfg, venda, podeVerValores, tarifaL
  * Junta catálogo, vendas 30d (Map sku → agregado de agregarPorSku), custos e config.
  * Família = SKUs com o mesmo group.id (variações do mesmo produto na Magalu).
  */
-export function enriquecerSkus(rows, { vendas = new Map(), custos = new Map(), cfg = null, podeVerValores = false } = {}) {
+export function enriquecerSkus(rows, { vendas = new Map(), custos = new Map(), cfg = null, reais = null, podeVerValores = false } = {}) {
   const porGrupo = new Map()
   for (const r of rows) if (r.grupoId) porGrupo.set(r.grupoId, (porGrupo.get(r.grupoId) ?? 0) + 1)
   const tarifaLoja = tarifaFixaDaLoja(vendas)
@@ -140,7 +141,7 @@ export function enriquecerSkus(rows, { vendas = new Map(), custos = new Map(), c
       custo,
       temCusto: custo != null,
       tamanhoFamilia: r.grupoId ? porGrupo.get(r.grupoId) : 1,
-      margem: margemUnitaria(r, { custo, cfg, venda, podeVerValores, tarifaLoja }),
+      margem: margemUnitaria(r, { custo, cfg, venda, podeVerValores, tarifaLoja, real: custoRealDoSku(reais, r.sku) }),
     }
   })
 }

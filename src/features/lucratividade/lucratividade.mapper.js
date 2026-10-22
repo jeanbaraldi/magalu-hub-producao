@@ -41,10 +41,10 @@ export function pendenciasPorMotivo(rows) {
   return [...m.entries()].map(([motivo, skus]) => ({ motivo, skus })).sort((a, b) => b.skus - a.skus)
 }
 
-export function mapLucratividade({ pedidos = [], skus = [], custos, cfg, podeVerValores, dias, agora }) {
+export function mapLucratividade({ pedidos = [], skus = [], custos, cfg, reais = null, podeVerValores, dias, agora }) {
   const ref = agora ? new Date(agora) : new Date(0)
   const inicio = inicioDoPeriodo(dias, ref)
-  const { rows: base, semSku } = montarLinhas(pedidosNaJanela(pedidos, inicio), { catalogo: indexarCatalogo(skus), custos, cfg, podeVerValores })
+  const { rows: base, semSku } = montarLinhas(pedidosNaJanela(pedidos, inicio), { catalogo: indexarCatalogo(skus), custos, cfg, reais, podeVerValores })
 
   const porReceita = new Map(curvaAbc(base, (l) => l.receita).map((l) => [l.sku, l.curva]))
   const comLucro = curvaAbc(base, (l) => l.mc)

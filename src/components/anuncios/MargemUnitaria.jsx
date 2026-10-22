@@ -36,7 +36,19 @@ export default function MargemUnitaria({ margem }) {
       valor: l.tarifa?.valor ?? null,
       vazio: l.comissao.valor == null ? '—' : 'não medida',
     },
-    { id: 'frete', rotulo: l.frete.pct != null ? `Frete (${pct(l.frete.pct)} configurado)` : 'Frete', valor: l.frete.valor, vazio: 'não configurado' },
+    {
+      id: 'frete',
+      rotulo: l.frete.fonte === 'magalu' ? 'Frete cobrado pela Magalu (média 60d)'
+        : l.frete.pct != null ? `Frete (${pct(l.frete.pct)} configurado)` : 'Frete',
+      valor: l.frete.valor,
+      vazio: 'não configurado',
+    },
+    {
+      id: 'mdr',
+      rotulo: l.mdr?.pct != null ? `Intermediação (${pct(l.mdr.pct)}${l.mdr.daLoja ? ' média da loja' : ''})` : 'Intermediação (MDR)',
+      valor: l.mdr?.valor ?? null,
+      vazio: 'não medida',
+    },
     { id: 'custo', rotulo: 'Custo do produto', valor: l.custo.valor, vazio: '—' },
     { id: 'ads', rotulo: 'Ads por unidade', valor: null, vazio: 'não integrado' },
     { id: 'imposto', rotulo: l.imposto.pct != null ? `Impostos (${pct(l.imposto.pct)})` : 'Impostos', valor: l.imposto.valor, vazio: 'configure em Impostos' },
