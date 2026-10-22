@@ -30,7 +30,7 @@ Telas que só dependem de pedidos e catálogo: **Vendas Hoje**, **Tarefas**, **P
   `freight.shared` veio vazio em todos os pedidos. O custo real de frete por pedido só existe
   na API `financial-analysis` (escopo `open:order-financial-report-seller:read`, AVAILABLE no
   client desde 22/10/2026 e pedido no login; cada loja precisa reconectar para o token ter o
-  escopo). Desde 25/10/2026 é lida (ver "Análise financeira" abaixo); SKU sem medição usa o
+  escopo). Desde 22/10/2026 é lida (ver "Análise financeira" abaixo); SKU sem medição usa o
   frete % de Impostos. Sem custo, comissão ou imposto, a margem é INDISPONÍVEL
   (com o motivo), nunca zero.
 - A receita das telas por SKU soma os ITENS; a de Pedidos/Dashboard soma o total do pedido.
@@ -38,7 +38,7 @@ Telas que só dependem de pedidos e catálogo: **Vendas Hoje**, **Tarefas**, **P
 - Ainda não feito (depende da API conferida): Campanhas/Ads, Promoções, Perguntas,
   Devoluções, Reclamações, Recebíveis, Estoque Full.
 
-## Análise financeira: frete real e intermediação (25/10/2026)
+## Análise financeira: frete real e intermediação (22/10/2026)
 `magalu-sync` `kind: "financeiro"` lê `GET /seller/v1/financial-analysis/orders` (par de datas
 `updated_at__gte/lte`, janela máxima de 15 dias: o período é lido em janelas) e grava cada
 transação em `magalu.financial_transactions` (PK conta + código do pedido + `identifier`).
