@@ -30,6 +30,12 @@ export default function MargemUnitaria({ margem }) {
     : l?.comissao?.pct != null ? `Comissão (${pct(l.comissao.pct)} configurada)` : 'Comissão Magalu'
   const linhas = l ? [
     { id: 'comissao', rotulo: comissaoRotulo, valor: l.comissao.valor, vazio: '—' },
+    {
+      id: 'tarifa',
+      rotulo: l.tarifa?.fonte === 'loja' ? 'Tarifa fixa Magalu (média da loja)' : 'Tarifa fixa Magalu',
+      valor: l.tarifa?.valor ?? null,
+      vazio: l.comissao.valor == null ? '—' : 'não medida',
+    },
     { id: 'frete', rotulo: l.frete.pct != null ? `Frete (${pct(l.frete.pct)} configurado)` : 'Frete', valor: l.frete.valor, vazio: 'não configurado' },
     { id: 'custo', rotulo: 'Custo do produto', valor: l.custo.valor, vazio: '—' },
     { id: 'ads', rotulo: 'Ads por unidade', valor: null, vazio: 'não integrado' },

@@ -38,6 +38,17 @@ describe('anuncios.mapper', () => {
     expect(m.linhas.comissao.fonte).toBe('magalu')
   })
 
+  it('tarifa fixa observada entra na comissão; sem venda usa a média da loja', () => {
+    const venda = { receita: 200, comissao: 30, tarifaFixa: 10, unidadesComTarifa: 2, itensSemComissao: 0, itensSemValor: 0 }
+    expect(taxaComissaoObservada(venda)).toBeCloseTo(0.1)
+    const m = margemUnitaria(s('a', 'PUBLISHED', 1, 100), { custo: 40, cfg, venda, podeVerValores: true })
+    // 100 − 40 custo − 10 comissão − 5 tarifa − 10 imposto − 5 frete
+    expect(m.mc).toBeCloseTo(30)
+    expect(m.linhas.tarifa).toEqual({ valor: 5, fonte: 'sku' })
+    const semVenda = margemUnitaria(s('b', 'PUBLISHED', 1, 100), { custo: 40, cfg, venda: null, podeVerValores: true, tarifaLoja: 5.5 })
+    expect(semVenda.linhas.tarifa).toEqual({ valor: 5.5, fonte: 'loja' })
+  })
+
   it('sem comissão real cai no % configurado; sem custo a margem é indisponível', () => {
     const r = s('a', 'PUBLISHED', 1, 100)
     const comPct = margemUnitaria(r, { custo: 40, cfg, venda: { receita: 100, comissao: 5, itensSemComissao: 1, itensSemValor: 0 }, podeVerValores: true })

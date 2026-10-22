@@ -11,7 +11,22 @@ const item = (sku, qtd, centavos, comissao) => ({
 describe('itensDoPedido (formato da spec)', () => {
   it('lê deliveries[].items com unit_price e comissão do item', () => {
     const its = itensDoPedido({ deliveries: [{ status: 'approved', items: [item('A1', 2, 1990, 600)] }] })
-    expect(its).toEqual([{ sku: 'A1', titulo: 'Produto A1', quantidade: 2, precoUnitario: 19.9, total: 39.8, comissao: 6 }])
+    expect(its).toEqual([{ sku: 'A1', titulo: 'Produto A1', quantidade: 2, precoUnitario: 19.9, total: 39.8, comissao: 6, tarifaFixa: null }])
+  })
+  it('tarifa fixa = comissão do pedido − comissão dos itens, rateada por unidade', () => {
+    const its = itensDoPedido({
+      amounts: { commission: { type: 'value', ...brl(2700) } },
+      deliveries: [{ status: 'shipped', items: [item('A', 2, 10000, 1200), item('B', 1, 5000, 400)] }],
+    })
+    // 27,00 − (12,00 + 4,00) = 11,00 em 3 unidades → 3,666… por unidade
+    expect(its[0].tarifaFixa).toBeCloseTo(22 / 3)
+    expect(its[1].tarifaFixa).toBeCloseTo(11 / 3)
+  })
+  it('tarifa desconhecida com entrega cancelada, item sem comissão ou diferença negativa', () => {
+    const com = { amounts: { commission: brl(1000) } }
+    expect(itensDoPedido({ ...com, deliveries: [{ status: 'shipped', items: [item('A', 1, 1000, 500)] }, { status: 'cancelled', items: [item('B', 1, 1000, 500)] }] })[0].tarifaFixa).toBeNull()
+    expect(itensDoPedido({ ...com, deliveries: [{ items: [item('A', 1, 1000)] }] })[0].tarifaFixa).toBeNull()
+    expect(itensDoPedido({ amounts: { commission: brl(100) }, deliveries: [{ items: [item('A', 1, 1000, 500)] }] })[0].tarifaFixa).toBeNull()
   })
   it('ignora a entrega cancelada (cancelamento parcial)', () => {
     const its = itensDoPedido({ deliveries: [
@@ -52,6 +67,13 @@ describe('agregarPorSku', () => {
   it('soma só vendas, conta itens sem valor, sem comissão e sem SKU', () => {
     const { linhas, semSku } = agregarPorSku(pedidos)
     expect(semSku).toBe(1)
-    expect(linhas).toEqual([{ sku: 'A', titulo: 'Produto A', unidades: 3, receita: 10, comissao: 2, itensSemComissao: 1, itensSemValor: 1, itensSemQtd: 0, pedidos: 2 }])
+    // Sem amounts.commission no pedido a tarifa fixa é desconhecida: comissão incompleta.
+    expect(linhas).toEqual([{ sku: 'A', titulo: 'Produto A', unidades: 3, receita: 10, comissao: 0, tarifaFixa: 0, unidadesComTarifa: 0, itensSemComissao: 2, itensSemValor: 1, itensSemQtd: 0, pedidos: 2 }])
+  })
+  it('comissão por SKU soma percentual + tarifa fixa', () => {
+    const { linhas } = agregarPorSku([
+      { order_id: '1', status: 'finished', payload: { amounts: { commission: brl(1700) }, deliveries: [{ items: [item('A', 2, 5000, 1200)] }] } },
+    ])
+    expect(linhas[0]).toMatchObject({ comissao: 17, tarifaFixa: 5, unidadesComTarifa: 2, itensSemComissao: 0 })
   })
 })
