@@ -2,9 +2,8 @@
 export const REFRESH_MS = 30_000
 
 /**
- * Puxa pedidos novos da Magalu enquanto a tela está aberta. O cron só roda a cada
- * 30 min; sem isto a tela "ao vivo" mostraria pedido com até meia hora de atraso.
- * 2 min respeita o limite por seller da API (429 é por seller e módulo).
+ * Intervalo mínimo entre duas buscas na Magalu disparadas pela tela (ao abrir). A busca
+ * contínua é do cron `magalu-sync-pedidos-ao-vivo`, a cada minuto; o botão Atualizar força.
  */
 export const SYNC_MS = 120_000
 

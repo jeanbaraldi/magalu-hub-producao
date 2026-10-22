@@ -171,6 +171,20 @@ export function mapPedido(accountId: string, pedido: unknown, agora: string): Li
 }
 
 /**
+ * Só os pedidos que mudaram desde a última gravação, pelo `updated_at` da Magalu.
+ * O sync roda a cada minuto e a API devolve os pedidos do dia todo: regravar os iguais
+ * dispararia o Realtime (Vendas Hoje e o card do Hub) a cada rodada sem venda nova.
+ * Pedido sem `updated_at`, ou que não estava gravado, é sempre gravado.
+ */
+export function pedidosMudados(linhas: LinhaPedido[], gravados: Map<string, string | null>): LinhaPedido[] {
+  return linhas.filter((l) => {
+    const novo = texto(l.payload.updated_at)
+    if (!novo || !gravados.has(l.order_id)) return true
+    return gravados.get(l.order_id) !== novo
+  })
+}
+
+/**
  * Status de pedido que NÃO conta como venda. Doc: new (criado, pagamento não aprovado),
  * approved, cancelled (todas as entregas canceladas), finished. `new` fica fora: ainda não
  * é dinheiro, mesma régua do "pago" do Gestor ML.

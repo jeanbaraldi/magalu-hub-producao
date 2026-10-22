@@ -76,7 +76,7 @@ export default function VendasAoVivoHero({ kpis, loading, sincronizando, sincron
         {avisos.length > 0 && <p>{avisos.join(' · ')}</p>}
         <p>
           {sincronizadoEm
-            ? `Pedidos buscados na Magalu às ${horaMin(sincronizadoEm)} · nova busca a cada 2 min com a tela aberta`
+            ? `Pedidos buscados na Magalu às ${horaMin(sincronizadoEm)} · a Magalu é consultada a cada minuto`
             : sincronizando ? 'Buscando pedidos novos na Magalu…' : 'Mostrando o espelho sincronizado da Magalu'}
         </p>
         {erroSync && <p className="text-amber-200">{`Não consegui buscar pedidos novos agora: ${erroSync}. Mostrando o último espelho.`}</p>}

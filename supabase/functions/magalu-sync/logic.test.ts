@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1"
-import { dinheiro, estoqueDaResposta, mapPedido, mapSku, pedidoContaComoVenda, precoDaResposta, CANAL_MAGALU } from "./logic.ts"
+import { dinheiro, estoqueDaResposta, mapPedido, mapSku, pedidoContaComoVenda, pedidosMudados, precoDaResposta, CANAL_MAGALU } from "./logic.ts"
 
 const AGORA = "2026-10-21T12:00:00.000Z"
 const brl = (centavos: number) => ({ total: centavos, normalizer: 100, currency: "BRL" })
@@ -82,4 +82,11 @@ Deno.test("pedidoContaComoVenda: new e cancelado não contam", () => {
   assertEquals(pedidoContaComoVenda(null), false)
   assertEquals(pedidoContaComoVenda("approved"), true)
   assertEquals(pedidoContaComoVenda("finished"), true)
+})
+
+Deno.test("pedidosMudados: grava só pedido novo, mudado ou sem updated_at", () => {
+  const ped = (id: string, updated_at?: string) => mapPedido("t1", { id, status: "approved", updated_at }, AGORA)!
+  const linhas = [ped("igual", "2026-10-21T10:00:00+00:00"), ped("mudou", "2026-10-21T11:00:00+00:00"), ped("novo", "x"), ped("sem-data")]
+  const gravados = new Map<string, string | null>([["igual", "2026-10-21T10:00:00+00:00"], ["mudou", "2026-10-21T10:00:00+00:00"], ["sem-data", null]])
+  assertEquals(pedidosMudados(linhas, gravados).map((l) => l.order_id), ["mudou", "novo", "sem-data"])
 })
