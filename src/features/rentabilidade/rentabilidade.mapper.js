@@ -56,7 +56,7 @@ export function resumoDre(rows, { cfg, podeVerValores, semSku = 0, pedidosSemIte
     mdrParcial: mdr != null && comMdr.length < rows.length,
     semFrete: frete == null,
     semMdr: mdr == null,
-    freteMedido: rows.some((r) => r.fonteFrete === 'magalu'),
+    freteMedido: rows.some((r) => r.fonteFrete === 'magalu' || r.fonteFrete === 'estimado'),
     lucro,
     margem: lucro != null && receita > 0 ? (lucro / receita) * 100 : null,
     completo, faltando,

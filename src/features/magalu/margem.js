@@ -32,6 +32,7 @@ export function calcularMargem(venda, custoUnit, cfg, real = null) {
   const comissaoPct = fracao(cfg?.commission_pct)
   const fretePct = fracao(cfg?.freight_pct)
   const freteMedido = real?.fretePorUnidade != null && Number.isFinite(real.fretePorUnidade)
+  const fretePctReal = !freteMedido && real?.fretePct != null && Number.isFinite(real.fretePct) ? real.fretePct : null
   const mdrMedido = real?.mdrPct != null && Number.isFinite(real.mdrPct)
   if (imposto == null) faltando.push('alíquota de imposto')
   const receita = venda.receita
@@ -44,11 +45,14 @@ export function calcularMargem(venda, custoUnit, cfg, real = null) {
     custo: custoUnit == null ? null : Number(custoUnit) * venda.unidades,
     comissao: valorComissao,
     imposto: imposto == null ? null : receita * imposto,
-    frete: freteMedido ? real.fretePorUnidade * venda.unidades : fretePct == null ? null : receita * fretePct,
+    frete: freteMedido ? real.fretePorUnidade * venda.unidades
+      : fretePctReal != null ? receita * fretePctReal
+        : fretePct == null ? null : receita * fretePct,
     mdr: mdrMedido ? receita * real.mdrPct : null,
   }
   const semFrete = componentes.frete == null
-  const fonteFrete = freteMedido ? 'magalu' : fretePct == null ? null : 'percentual'
+  const fonteFrete = freteMedido ? (real.freteEstimado ? 'estimado' : 'magalu')
+    : fretePctReal != null ? 'estimado' : fretePct == null ? null : 'percentual'
   const extra = { semFrete, semMdr: !mdrMedido, fonteComissao, fonteFrete }
   if (faltando.length > 0) return { mc: null, mcPct: null, faltando, componentes, ...extra }
 
@@ -87,36 +91,102 @@ export function curvaAbc(linhas, valorDe) {
 export const MIN_UNIDADES_MEDIDAS = 1
 
 /**
- * Linhas de magalu.v_custos_reais_sku → Map sku → { fretePorUnidade, mdrPct, unidades, fonte }.
- * SKU sem venda medida recebe a TAXA de intermediação média da loja (é % da venda e varia
- * pouco); o frete NÃO é estimado pela loja (depende do tamanho do produto): fica null.
+ * Faixas de peso cobrado (g) para estimar o frete de SKU que nunca vendeu: média do frete
+ * por unidade dos SKUs MEDIDOS da loja na mesma faixa. Frete da Magalu depende do peso e do
+ * destino, então é estimativa e a tela diz isso.
  */
-export function custosReaisPorSku(linhas) {
+export const FAIXAS_PESO_G = [1000, 2000, 5000, 10000, Infinity]
+/** SKUs medidos que uma faixa precisa ter para servir de estimativa. */
+export const MIN_SKUS_FAIXA = 2
+
+const faixaDoPeso = (g) => (g == null || !(g > 0) ? null : FAIXAS_PESO_G.findIndex((lim) => g <= lim))
+
+/**
+ * Peso cobrado da embalagem em gramas: o maior entre o real e o cubado (C × L × A ÷ 6000,
+ * em kg). Lê `dimensions` do SKU da Magalu (item `name: package`, senão o primeiro).
+ * Medida ausente ou em unidade desconhecida → null.
+ */
+export function pesoCobradoG(dimensions) {
+  if (!Array.isArray(dimensions)) return null
+  const d = dimensions.find((x) => x?.name === 'package') ?? dimensions[0]
+  if (!d) return null
+  const em = (v, unidades) => (v && unidades[v.unit] != null && Number.isFinite(Number(v.value)) ? Number(v.value) * unidades[v.unit] : null)
+  const peso = em(d.weight, { g: 1, kg: 1000 })
+  const cm = { cm: 1, m: 100, mm: 0.1 }
+  const [l, w, h] = [em(d.length, cm), em(d.width, cm), em(d.height, cm)]
+  const cubado = l != null && w != null && h != null ? (l * w * h) / 6000 * 1000 : null
+  if (peso == null && cubado == null) return null
+  return Math.max(peso ?? 0, cubado ?? 0)
+}
+
+/**
+ * Linhas de magalu.v_custos_reais_sku → { porSku, mdrPctLoja, fretePorFaixa }.
+ * SKU sem venda medida recebe a TAXA de intermediação média da loja (é % da venda e varia
+ * pouco) e o frete estimado pela faixa de peso (`pesos`: Map sku → peso cobrado em g).
+ */
+export function custosReaisPorSku(linhas, pesos = new Map()) {
   const porSku = new Map()
   let vendaLoja = 0
   let mdrLoja = 0
+  let vendaCom = 0
+  let comissaoLoja = 0
+  let vendaFrete = 0
+  let freteLoja = 0
+  const faixas = FAIXAS_PESO_G.map(() => ({ frete: 0, unidades: 0, skus: 0 }))
   for (const l of linhas ?? []) {
     const unidades = Number(l.unidades_vendidas)
     const venda = Number(l.venda)
     const frete = l.frete == null ? null : Number(l.frete)
     const mdr = l.mdr == null ? null : Number(l.mdr)
+    const comissao = l.comissao == null ? null : Number(l.comissao)
     if (!(unidades >= MIN_UNIDADES_MEDIDAS)) continue
     if (venda > 0 && mdr != null) { vendaLoja += venda; mdrLoja += mdr }
+    if (venda > 0 && comissao != null) { vendaCom += venda; comissaoLoja += comissao }
+    if (venda > 0) { vendaFrete += venda; freteLoja += frete ?? 0 }
+    // Venda medida sem nenhum débito de frete = frete zero de verdade (a Magalu bancou).
+    const fretePorUnidade = frete == null ? 0 : frete / unidades
     porSku.set(String(l.sku), {
-      unidades,
-      // Venda medida sem nenhum débito de frete = frete zero de verdade (a Magalu bancou).
-      fretePorUnidade: frete == null ? 0 : frete / unidades,
+      unidades, fretePorUnidade,
       mdrPct: venda > 0 && mdr != null ? mdr / venda : null,
+      comissaoPct: venda > 0 && comissao != null ? comissao / venda : null,
     })
+    const f = faixaDoPeso(pesos.get(String(l.sku)))
+    if (f != null && f >= 0) { faixas[f].frete += fretePorUnidade * unidades; faixas[f].unidades += unidades; faixas[f].skus++ }
   }
   const mdrPctLoja = vendaLoja > 0 ? mdrLoja / vendaLoja : null
-  return { porSku, mdrPctLoja }
+  const comissaoPctLoja = vendaCom > 0 ? comissaoLoja / vendaCom : null
+  // Último recurso para SKU sem faixa de peso medida: frete médio da loja em % da venda.
+  const fretePctLoja = vendaFrete > 0 ? freteLoja / vendaFrete : null
+  const fretePorFaixa = faixas.map((x) => (x.skus >= MIN_SKUS_FAIXA && x.unidades > 0 ? { valor: x.frete / x.unidades, skus: x.skus } : null))
+  return { porSku, mdrPctLoja, comissaoPctLoja, fretePctLoja, fretePorFaixa, pesos }
 }
 
-/** Custo real de um SKU (o dele, ou a taxa de intermediação média da loja). */
-export function custoRealDoSku(reais, sku) {
+/**
+ * Custo real de um SKU: o medido nas vendas dele (12 meses); sem venda, frete estimado pela
+ * faixa de peso (`pesoG`) e intermediação/comissão médias da loja. `freteEstimado` e
+ * `comissaoDaLoja` dizem qual.
+ */
+export function custoRealDoSku(reais, sku, pesoG = reais?.pesos?.get(String(sku)) ?? null) {
   if (!reais) return null
   const d = reais.porSku.get(String(sku))
-  if (d) return { fretePorUnidade: d.fretePorUnidade, mdrPct: d.mdrPct ?? reais.mdrPctLoja, unidadesMedidas: d.unidades }
-  return reais.mdrPctLoja == null ? null : { fretePorUnidade: null, mdrPct: reais.mdrPctLoja, unidadesMedidas: 0 }
+  if (d) {
+    return {
+      fretePorUnidade: d.fretePorUnidade, mdrPct: d.mdrPct ?? reais.mdrPctLoja, unidadesMedidas: d.unidades, freteEstimado: false,
+      comissaoPct: d.comissaoPct ?? reais.comissaoPctLoja ?? null, comissaoDaLoja: d.comissaoPct == null,
+    }
+  }
+  const f = faixaDoPeso(pesoG)
+  const est = f != null && f >= 0 ? reais.fretePorFaixa?.[f] ?? null : null
+  if (!est && reais.mdrPctLoja == null && reais.comissaoPctLoja == null && reais.fretePctLoja == null) return null
+  return {
+    // Sem faixa de peso: o % médio de frete da loja sobre a venda.
+    fretePct: est ? null : reais.fretePctLoja ?? null,
+    comissaoPct: reais.comissaoPctLoja ?? null,
+    comissaoDaLoja: true,
+    fretePorUnidade: est ? est.valor : null,
+    mdrPct: reais.mdrPctLoja,
+    unidadesMedidas: 0,
+    freteEstimado: !!est,
+    skusNaFaixa: est?.skus ?? null,
+  }
 }

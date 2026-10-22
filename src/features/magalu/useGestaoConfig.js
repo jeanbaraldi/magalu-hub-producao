@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApp } from '../../context/AppContext'
 import { supabase } from '../../lib/supabase'
 import { lerTudo } from './magaluDb'
-import { custosReaisPorSku } from './margem'
+import { custosReaisPorSku, pesoCobradoG } from './margem'
 
 /**
  * Custos por SKU (`magalu.sku_costs`) e configuração financeira da loja
@@ -24,15 +24,20 @@ export function useGestaoConfig() {
     const meu = ++pedido.current
     setLoading(true)
     try {
-      const [custos, cfgRes, papelRes, reaisRes] = await Promise.all([
+      const [custos, cfgRes, papelRes, reaisRes, dims] = await Promise.all([
         lerTudo('sku_costs', 'sku, cost, updated_at', (q) => q.eq('account_id', contaId).order('sku', { ascending: true })),
         supabase.from('account_settings').select('tax_regime, tax_pct, commission_pct, freight_pct, updated_at').eq('account_id', contaId).maybeSingle(),
         supabase.rpc('papel_atual'),
-        // Frete e intermediação medidos na análise financeira da Magalu (60 dias).
+        // Frete e intermediação medidos na análise financeira da Magalu (12 meses).
         // Falha aqui não derruba a tela: a margem cai no frete% configurado.
-        lerTudo('v_custos_reais_sku', 'sku, unidades_vendidas, venda, frete, mdr',
+        lerTudo('v_custos_reais_sku', 'sku, unidades_vendidas, venda, frete, mdr, comissao',
           (q) => q.eq('account_id', contaId).order('sku', { ascending: true })).catch(() => null),
+        // Peso/medidas da embalagem: base da estimativa de frete de SKU que nunca vendeu.
+        lerTudo('skus', 'sku, dimensions:payload->dimensions',
+          (q) => q.eq('account_id', contaId).order('sku', { ascending: true })).catch(() => []),
       ])
+      const pesos = new Map()
+      for (const d of dims) { const g = pesoCobradoG(d.dimensions); if (g != null) pesos.set(String(d.sku), g) }
       if (meu !== pedido.current) return
       if (cfgRes.error) throw new Error(cfgRes.error.message)
       setPapel(papelRes.error ? null : papelRes.data)
@@ -40,7 +45,7 @@ export function useGestaoConfig() {
         conta: contaId,
         custos: new Map(custos.map((c) => [c.sku, Number(c.cost)])),
         cfg: cfgRes.data ?? null,
-        reais: reaisRes ? custosReaisPorSku(reaisRes) : null,
+        reais: reaisRes ? custosReaisPorSku(reaisRes, pesos) : null,
         error: null,
       })
     } catch (e) {

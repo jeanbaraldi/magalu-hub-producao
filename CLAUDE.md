@@ -48,12 +48,20 @@ Cron `magalu-sync-financeiro` 1x/dia, 15 dias; backfill com `days: 60`.
   vendedor), DISCOUNT, PROMOTION (débito do vendedor / crédito de subsídio), REFUND (sem SKU).
 - ⚠️ **O frete compartilhado vem SEM sku**: só `entity.id` do item. `mapTransacoes` resolve
   pelo mesmo id nas outras transações do pedido.
-- View `magalu.v_custos_reais_sku` (security_invoker, 60 dias): unidades, venda, frete e MDR por
+- View `magalu.v_custos_reais_sku` (security_invoker, hoje 12 meses): unidades, venda, frete e MDR por
   SKU. `custosReaisPorSku`/`custoRealDoSku` (`margem.js`) viram frete por unidade e taxa de
   MDR; `calcularMargem(venda, custo, cfg, real)` usa o medido antes do frete %. SKU sem medição:
   frete cai no %, MDR na média da loja; MDR desconhecido fica fora da conta e marcado `semMdr`.
 - A margem de Anúncios, Performance, Lucratividade e Rentabilidade passou a descontar o MDR,
   que antes não entrava: as margens caem ~4 pontos onde ele é medido.
+- **Histórico de 12 meses e estimativa para quem nunca vendeu** (migration `20261026120000`):
+  a view cobre 365 dias e traz a comissão (COMMISSION/*). Backfill em partes com
+  `{"kind":"financeiro","days":180,"skip_days":N}` (`days` até 365 neste kind). Medido em
+  22/10/2026: das 166 publicadas, só 50 tinham alguma venda. SKU sem venda recebe, nesta ordem:
+  frete = média por unidade dos SKUs MEDIDOS da loja na mesma faixa de peso cobrado
+  (`pesoCobradoG`: maior entre peso e C×L×A÷6000; faixas 1/2/5/10 kg; mínimo 2 SKUs), senão o
+  % médio de frete da loja sobre a venda; comissão e MDR = média da loja. Tudo rotulado
+  "estimado"/"média da loja" (`fonteFrete: 'estimado'`, `comissao.fonte: 'loja'`).
 
 ## Vendas Hoje "ao vivo" (24/10/2026)
 Mesmo formato do Ao vivo da Shopee: cabeçalho azul com receita do dia, variação vs ontem até a
