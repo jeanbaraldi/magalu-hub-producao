@@ -10,10 +10,8 @@ export default function Settings() {
   const { sellers, contaId, selectSeller, addAccount, removeAccount, isConnecting, connectionError, checkingStatus } = useApp()
   const { sincronizar, rodando, resultado } = useSincronizacao()
 
-  function desconectar(loja) {
-    const nome = loja.nickname ?? loja.id
-    if (window.confirm(`Desconectar a loja ${nome}? Os dados já sincronizados ficam no banco.`)) removeAccount(loja.id ?? loja.account_id)
-  }
+  // A confirmação fica na própria linha (LojaRow): window.confirm não abre dentro do Hub.
+  const desconectar = (loja) => removeAccount(loja.id ?? loja.account_id)
 
   return (
     <div className="animate-fade-in">
