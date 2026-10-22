@@ -97,3 +97,11 @@ describe('anuncios.mapper', () => {
     expect(mapSkusResumo([]).precoMedio).toBeNull()
   })
 })
+
+describe('contarSubfiltros', () => {
+  it('conta só os ativos, por sub-filtro', async () => {
+    const { contarSubfiltros } = await import('./anuncios.mapper')
+    const rows = enriquecerSkus([s('a', 'PUBLISHED', 0), s('b', 'PUBLISHED', 3, 80, 100), s('c', 'UNPUBLISHED', 0)])
+    expect(contarSubfiltros(rows)).toMatchObject({ todos: 2, sem_estoque: 1, estoque_baixo: 1, com_desconto: 1 })
+  })
+})

@@ -1,23 +1,31 @@
-import { Boxes, ShoppingBag, Tag, TrendingUp } from 'lucide-react'
+import { BarChart3, Box, ShoppingBag, Tag } from 'lucide-react'
 import { brl, inteiro } from '../magalu/formatos'
 
-/** Faixa de resumo no topo, como no Gestor ML. Só props. */
-export default function AnunciosResumoFaixa({ resumo, loading }) {
-  const v = (x) => (loading ? '…' : x)
-  const itens = [
-    { Icone: Tag, valor: inteiro(resumo.total), rotulo: 'anúncios' },
-    { Icone: Boxes, valor: inteiro(resumo.estoqueTotal), rotulo: resumo.estoqueDesconhecido > 0 ? `em estoque (${resumo.estoqueDesconhecido} sem informação)` : 'em estoque' },
-    { Icone: TrendingUp, valor: brl(resumo.precoMedio), rotulo: 'preço médio', antes: true },
-    { Icone: ShoppingBag, valor: inteiro(resumo.vendidos30), rotulo: 'vendidos (30d)' },
-  ]
+/** Barra de resumo no topo, igual à do Gestor ML. Só props. */
+export default function AnunciosResumoFaixa({ resumo }) {
+  const sep = <div className="w-px h-4 bg-slate-200 hidden sm:block" />
   return (
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm">
-      {itens.map(({ Icone, valor, rotulo, antes }) => (
-        <span key={rotulo} className="inline-flex items-center gap-1.5 text-slate-500">
-          <Icone aria-hidden="true" size={14} className="text-slate-400" />
-          {antes ? <>{rotulo} <b className="text-slate-900 tabular-nums">{v(valor)}</b></> : <><b className="text-slate-900 tabular-nums">{v(valor)}</b> {rotulo}</>}
-        </span>
-      ))}
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
+      <div className="flex items-center gap-1.5 text-xs text-slate-500">
+        <Tag aria-hidden="true" size={12} />
+        <span className="font-semibold text-slate-700">{inteiro(resumo.total)}</span> anúncios
+      </div>
+      {sep}
+      <div className="flex items-center gap-1.5 text-xs text-slate-500">
+        <Box aria-hidden="true" size={12} />
+        <span className="font-semibold text-slate-700">{inteiro(resumo.estoqueTotal)}</span> em estoque
+        {resumo.estoqueDesconhecido > 0 && <span className="text-slate-400">{`(${inteiro(resumo.estoqueDesconhecido)} sem informação)`}</span>}
+      </div>
+      {sep}
+      <div className="flex items-center gap-1.5 text-xs text-slate-500">
+        <BarChart3 aria-hidden="true" size={12} />
+        Preço médio <span className="font-semibold text-slate-700">{brl(resumo.precoMedio)}</span>
+      </div>
+      {sep}
+      <div className="flex items-center gap-1.5 text-xs text-slate-500">
+        <ShoppingBag aria-hidden="true" size={12} />
+        <span className="font-semibold text-slate-700">{inteiro(resumo.vendidos30)}</span> vendidos (30d)
+      </div>
     </div>
   )
 }

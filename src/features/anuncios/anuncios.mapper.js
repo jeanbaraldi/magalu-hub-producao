@@ -148,6 +148,16 @@ export function contarAbas(rows) {
   }
 }
 
+/** Contagem de cada sub-filtro dentro da aba Ativos (como os chips do Gestor ML). */
+export function contarSubfiltros(rows) {
+  const ativos = rows.filter((r) => r.ativo)
+  const out = {}
+  for (const sub of ['todos', 'com_desconto', 'vendeu', 'sem_estoque', 'estoque_baixo', 'full', 'familia']) {
+    out[sub] = ativos.filter((r) => passaSub(r, sub)).length
+  }
+  return out
+}
+
 export function filtrarSkus(rows, { aba = 'todos', sub = 'todos', busca = '' } = {}) {
   const q = busca.trim().toLowerCase()
   return rows.filter((r) => {
