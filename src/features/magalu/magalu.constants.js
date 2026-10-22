@@ -12,4 +12,7 @@ export const MAGALU_ESCOPOS_PADRAO = [
   'open:portfolio-prices-seller:read',
   'open:portfolio-stocks-seller:read',
   'open:order-order-seller:read',
+  // Análise Financeira (frete, tarifa fixa, MDR por pedido). AVAILABLE no client desde
+  // 22/10/2026, pedido só aqui (não é --scopes-default): loja que reconectar passa a ter.
+  'open:order-financial-report-seller:read',
 ].join(' ')
