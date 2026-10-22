@@ -41,3 +41,18 @@ select cron.schedule('magalu-sync-skus', '15 9 * * *', $$
     body := '{"cron": true, "kind": "skus"}'::jsonb,
     timeout_milliseconds := 150000);
 $$);
+
+-- Análise financeira (frete real, intermediação/MDR, tarifas): 1x/dia, pedidos atualizados
+-- nos últimos 15 dias (repasse e estorno chegam depois da venda). Backfill inicial: chamar
+-- a função com {"kind":"financeiro","days":60}.
+select cron.unschedule(jobid) from cron.job where jobname = 'magalu-sync-financeiro';
+select cron.schedule('magalu-sync-financeiro', '35 9 * * *', $$
+  select net.http_post(
+    url := '__SUPABASE_URL__/functions/v1/magalu-sync',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer __ANON_KEY__',
+      'x-cron-secret', (select value from magalu.app_config where key = 'CRON_SECRET')),
+    body := '{"cron": true, "kind": "financeiro", "days": 15}'::jsonb,
+    timeout_milliseconds := 150000);
+$$);

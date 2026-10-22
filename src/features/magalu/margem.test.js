@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calcularMargem, curvaAbc } from './margem'
+import { calcularMargem, curvaAbc, custosReaisPorSku, custoRealDoSku } from './margem'
 
 const cfg = { tax_pct: 10, commission_pct: 16, freight_pct: null }
 
@@ -53,5 +53,40 @@ describe('calcularMargem com a comissão informada pela Magalu', () => {
     const m = calcularMargem({ receita: 100, unidades: 1, comissao: 16, itensSemComissao: 1 }, 50, { ...cfg, commission_pct: 20 })
     expect(m.mc).toBe(20)
     expect(m.fonteComissao).toBe('percentual')
+  })
+})
+
+describe('custo real medido na Magalu (frete e intermediação)', () => {
+  const venda = { receita: 200, unidades: 2, comissao: 30, itensSemComissao: 0 }
+
+  it('frete medido por unidade vence o frete% configurado e entra a intermediação', () => {
+    const m = calcularMargem(venda, 40, { ...cfg, freight_pct: 50 }, { fretePorUnidade: 12.5, mdrPct: 0.04 })
+    expect(m.componentes.frete).toBe(25)
+    expect(m.componentes.mdr).toBe(8)
+    expect(m.fonteFrete).toBe('magalu')
+    expect(m.semMdr).toBe(false)
+    // 200 − 80 − 30 − 20 − 25 − 8
+    expect(m.mc).toBe(37)
+  })
+
+  it('sem medição cai no frete% e a intermediação fica fora, marcada', () => {
+    const m = calcularMargem(venda, 40, { ...cfg, freight_pct: 5 }, null)
+    expect(m.componentes.frete).toBe(10)
+    expect(m.componentes.mdr).toBeNull()
+    expect(m.semMdr).toBe(true)
+    expect(m.fonteFrete).toBe('percentual')
+  })
+
+  it('custosReaisPorSku: frete por unidade, MDR do SKU e média da loja para SKU sem medição', () => {
+    const reais = custosReaisPorSku([
+      { sku: 'A', unidades_vendidas: 2, venda: 100, frete: 20, mdr: 4 },
+      { sku: 'B', unidades_vendidas: 1, venda: 300, frete: null, mdr: 12 },
+      { sku: 'C', unidades_vendidas: 0, venda: 0, frete: 5, mdr: 0 },
+    ])
+    expect(custoRealDoSku(reais, 'A')).toEqual({ fretePorUnidade: 10, mdrPct: 0.04, unidadesMedidas: 2 })
+    // Venda medida sem débito de frete: a Magalu não cobrou frete do vendedor.
+    expect(custoRealDoSku(reais, 'B').fretePorUnidade).toBe(0)
+    // Sem medição: frete desconhecido (não é estimado pela loja), MDR = média ponderada.
+    expect(custoRealDoSku(reais, 'Z')).toEqual({ fretePorUnidade: null, mdrPct: 16 / 400, unidadesMedidas: 0 })
   })
 })

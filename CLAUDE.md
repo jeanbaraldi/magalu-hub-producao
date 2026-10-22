@@ -30,13 +30,30 @@ Telas que só dependem de pedidos e catálogo: **Vendas Hoje**, **Tarefas**, **P
   `freight.shared` veio vazio em todos os pedidos. O custo real de frete por pedido só existe
   na API `financial-analysis` (escopo `open:order-financial-report-seller:read`, AVAILABLE no
   client desde 22/10/2026 e pedido no login; cada loja precisa reconectar para o token ter o
-  escopo). Enquanto a leitura não existir, vale o % de Impostos.
-  Frete fica como % informado. Sem custo, comissão ou imposto, a margem é INDISPONÍVEL
+  escopo). Desde 22/10/2026 é lida (ver "Análise financeira" abaixo); SKU sem medição usa o
+  frete % de Impostos. Sem custo, comissão ou imposto, a margem é INDISPONÍVEL
   (com o motivo), nunca zero.
 - A receita das telas por SKU soma os ITENS; a de Pedidos/Dashboard soma o total do pedido.
   Podem divergir se o pedido tiver frete/desconto fora dos itens.
 - Ainda não feito (depende da API conferida): Campanhas/Ads, Promoções, Perguntas,
   Devoluções, Reclamações, Recebíveis, Estoque Full.
+
+## Análise financeira: frete real e intermediação (22/10/2026)
+`magalu-sync` `kind: "financeiro"` lê `GET /seller/v1/financial-analysis/orders` (par de datas
+`updated_at__gte/lte`, janela máxima de 15 dias: o período é lido em janelas) e grava cada
+transação em `magalu.financial_transactions` (PK conta + código do pedido + `identifier`).
+Cron `magalu-sync-financeiro` 1x/dia, 15 dias; backfill com `days: 60`.
+- Categorias medidas: SALE/PRODUCT (crédito, = itens × preço), FEES/PLATFORM (tarifa fixa),
+  FEES/PAYMENT_PROCESSING (MDR ~4%), COMMISSION/*, SHIPPING_SHARE e SHIPPING_COST (frete do
+  vendedor), DISCOUNT, PROMOTION (débito do vendedor / crédito de subsídio), REFUND (sem SKU).
+- ⚠️ **O frete compartilhado vem SEM sku**: só `entity.id` do item. `mapTransacoes` resolve
+  pelo mesmo id nas outras transações do pedido.
+- View `magalu.v_custos_reais_sku` (security_invoker, 60 dias): unidades, venda, frete e MDR por
+  SKU. `custosReaisPorSku`/`custoRealDoSku` (`margem.js`) viram frete por unidade e taxa de
+  MDR; `calcularMargem(venda, custo, cfg, real)` usa o medido antes do frete %. SKU sem medição:
+  frete cai no %, MDR na média da loja; MDR desconhecido fica fora da conta e marcado `semMdr`.
+- A margem de Anúncios, Performance, Lucratividade e Rentabilidade passou a descontar o MDR,
+  que antes não entrava: as margens caem ~4 pontos onde ele é medido.
 
 ## Vendas Hoje "ao vivo" (24/10/2026)
 Mesmo formato do Ao vivo da Shopee: cabeçalho azul com receita do dia, variação vs ontem até a
