@@ -14,7 +14,7 @@ import { createClient } from "../_shared/supabase-schema.ts"
 import { cronOuUsuario, naoAutorizado } from "../_shared/cron-auth.ts"
 import { filtrarLojas, lojasDoUsuario, negarLoja, respostaLojaNegada, TODAS } from "../_shared/hub-lojas.ts"
 import { carregarConfig, listaDaResposta, mgGet, tokenValido, type Credencial } from "../_shared/magalu-api.ts"
-import { estoqueDaResposta, janelas15Dias, mapPedido, mapSku, mapTransacoes, pedidosMudados, precoDaResposta } from "./logic.ts"
+import { estoqueDaResposta, janelas15Dias, mapPedido, mapSku, mapTransacoes, semRepetidas, versaoMaisRecente, pedidosMudados, precoDaResposta } from "./logic.ts"
 
 const CAMINHO_SKUS = "/seller/v1/portfolios/skus"
 const CAMINHO_PEDIDOS = "/seller/v1/orders"
@@ -169,12 +169,13 @@ async function syncFinanceiro(supabase: Sb, cred: Credencial, token: string, pra
     if (Date.now() > prazo) { total = { ...total, truncated: true }; break }
     const filtros = { updated_at__gte: dataApi(j.de), updated_at__lte: dataApi(j.ate) }
     const r = await paginar(token, CAMINHO_FINANCEIRO, prazo, filtros, async (itens) => {
-      const linhas = []
-      for (const p of itens) {
+      const todas = []
+      for (const p of versaoMaisRecente(itens)) {
         const m = mapTransacoes(cred.account_id, p, inicio)
-        linhas.push(...m.linhas)
+        todas.push(...m.linhas)
         descartadas += m.descartadas
       }
+      const linhas = semRepetidas(todas)
       for (let i = 0; i < linhas.length; i += 500) {
         const { error } = await supabase.from("financial_transactions")
           .upsert(linhas.slice(i, i + 500), { onConflict: "account_id,order_code,identifier" })

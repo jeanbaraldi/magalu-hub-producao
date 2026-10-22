@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1"
-import { dinheiro, estoqueDaResposta, mapPedido, mapSku, pedidoContaComoVenda, pedidosMudados, precoDaResposta, CANAL_MAGALU, janelas15Dias, mapTransacoes } from "./logic.ts"
+import { dinheiro, estoqueDaResposta, mapPedido, mapSku, pedidoContaComoVenda, pedidosMudados, precoDaResposta, CANAL_MAGALU, janelas15Dias, mapTransacoes, semRepetidas, versaoMaisRecente } from "./logic.ts"
 
 const AGORA = "2026-10-21T12:00:00.000Z"
 const brl = (centavos: number) => ({ total: centavos, normalizer: 100, currency: "BRL" })
@@ -121,4 +121,19 @@ Deno.test("janelas15Dias cobre o período sem passar de 15 dias", () => {
   if (js[0].ate !== agora) throw new Error("começa no agora")
   if (js[js.length - 1].de !== agora - 60 * 86_400_000) throw new Error("termina no início")
   for (const j of js) if (j.ate - j.de >= 15 * 86_400_000) throw new Error("janela grande demais")
+})
+
+Deno.test("semRepetidas fica com a última linha da mesma chave", () => {
+  const base = { order_code: "1", identifier: "x" } as any
+  const r = semRepetidas([{ ...base, value: 1 }, { ...base, value: 2 }, { order_code: "2", identifier: "x", value: 3 } as any])
+  if (r.length !== 2 || r[0].value !== 2) throw new Error(JSON.stringify(r))
+})
+
+Deno.test("versaoMaisRecente: um registro por pedido, o de updated_at mais novo", () => {
+  const r = versaoMaisRecente([
+    { id: "a", extras: { order_code: "1" }, updated_at: "2026-10-14T00:00:00Z" },
+    { id: "b", extras: { order_code: "1" }, updated_at: "2026-10-12T00:00:00Z" },
+    { id: "c", extras: { order_code: "2" }, updated_at: "2026-10-12T00:00:00Z" },
+  ]) as any[]
+  if (r.length !== 2 || r.find((x) => x.extras.order_code === "1").id !== "a") throw new Error(JSON.stringify(r))
 })

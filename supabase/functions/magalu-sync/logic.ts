@@ -263,6 +263,36 @@ export function mapTransacoes(accountId: string, pedido: unknown, agora: string)
 }
 
 /**
+ * A API devolve o MESMO pedido em mais de um registro (versões da análise, medido em
+ * 22/10/2026: mesmo order_code, ids e updated_at diferentes, transações iguais). Fica a
+ * versão de `updated_at` mais recente de cada pedido.
+ */
+export function versaoMaisRecente(registros: unknown[]): unknown[] {
+  const porPedido = new Map<string, Obj>()
+  const sem: unknown[] = []
+  for (const r of registros) {
+    const code = ehObj(r) ? texto((ehObj(r.extras) ? r.extras : {}).order_code) ?? texto(r.external_id) : null
+    if (!ehObj(r) || !code) { sem.push(r); continue }
+    const atual = porPedido.get(code)
+    const t = Date.parse(String(r.updated_at ?? ""))
+    const tAtual = atual ? Date.parse(String(atual.updated_at ?? "")) : NaN
+    if (!atual || !(tAtual > t)) porPedido.set(code, r)
+  }
+  return [...porPedido.values(), ...sem]
+}
+
+/**
+ * Remove repetidas pela chave da tabela (pedido + identifier), ficando a ÚLTIMA. A mesma
+ * página da API pode trazer o pedido mais de uma vez, e o upsert do Postgres recusa o lote
+ * inteiro quando a chave se repete.
+ */
+export function semRepetidas(linhas: LinhaTransacao[]): LinhaTransacao[] {
+  const m = new Map<string, LinhaTransacao>()
+  for (const l of linhas) m.set(`${l.order_code}\u0000${l.identifier}`, l)
+  return [...m.values()]
+}
+
+/**
  * Janelas de no máximo 15 dias (limite da API), da mais recente para a mais antiga,
  * cobrindo [agora − dias, agora].
  */
