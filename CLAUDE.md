@@ -21,6 +21,14 @@ Telas que só dependem de pedidos e catálogo: **Vendas Hoje**, **Tarefas**, **P
 - Regras únicas em `src/features/magalu/`: `itens.js` (itens do pedido e agregação por SKU),
   `margem.js` (`calcularMargem` e `curvaAbc`, régua 80/95 da suíte), `useGestaoConfig.js`.
 - **Comissão vem da Magalu** em cada item do pedido; o % de Impostos só cobre item sem ela.
+  ⚠️ **Os itens NÃO trazem a tarifa fixa por unidade** (medido 22/10/2026: R$ 5,00 ou R$ 5,50,
+  sempre o mesmo valor por SKU). Ela só aparece no `amounts.commission` do PEDIDO, que é
+  itens + tarifa. `itensDoPedido` separa a diferença (`tarifaFixa`, rateada por unidade) e
+  `agregarPorSku` soma as duas em `comissao`. Sem a comissão do pedido ou com entrega
+  cancelada, a tarifa é desconhecida e o item conta em `itensSemComissao`.
+- **Frete do vendedor não vem nos pedidos**: `amounts.freight` é o que o COMPRADOR pagou e
+  `freight.shared` veio vazio em todos os pedidos. O custo real de frete por pedido só existe
+  na API `financial-analysis` (escopo próprio, ainda não habilitado); até lá vale o % de Impostos.
   Frete fica como % informado. Sem custo, comissão ou imposto, a margem é INDISPONÍVEL
   (com o motivo), nunca zero.
 - A receita das telas por SKU soma os ITENS; a de Pedidos/Dashboard soma o total do pedido.

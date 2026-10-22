@@ -57,35 +57,64 @@ export function mapSkuRow(r) {
 }
 
 /**
- * Taxa de comissão observada nas vendas do SKU: comissão ÷ receita, só quando todos os
- * itens vieram com valor e comissão. Senão null (a margem cai no % configurado).
+ * Comissão PERCENTUAL observada nas vendas do SKU: (comissão − tarifa fixa) ÷ receita, só
+ * quando todos os itens vieram com valor, comissão e tarifa. Senão null (cai no % configurado).
  */
 export function taxaComissaoObservada(venda) {
   if (!venda || venda.receita <= 0) return null
   if ((venda.itensSemComissao ?? 0) > 0 || (venda.itensSemValor ?? 0) > 0) return null
-  return venda.comissao / venda.receita
+  return (venda.comissao - (venda.tarifaFixa ?? 0)) / venda.receita
+}
+
+/** Tarifa fixa por unidade observada nas vendas do SKU (R$), ou null. */
+export function tarifaFixaObservada(venda) {
+  if (!venda || (venda.itensSemComissao ?? 0) > 0 || !(venda.unidadesComTarifa > 0)) return null
+  return venda.tarifaFixa / venda.unidadesComTarifa
+}
+
+/**
+ * Tarifa fixa média por unidade da loja (todas as vendas medidas), para SKU sem venda.
+ * É estimativa: a Magalu cobra R$ 5,00 ou R$ 5,50 conforme o SKU.
+ */
+export function tarifaFixaDaLoja(vendas) {
+  let tarifa = 0
+  let unidades = 0
+  for (const v of vendas.values()) {
+    if (v.unidadesComTarifa > 0) { tarifa += v.tarifaFixa; unidades += v.unidadesComTarifa }
+  }
+  return unidades > 0 ? tarifa / unidades : null
 }
 
 /**
  * Margem de contribuição por UNIDADE no preço atual, pela regra única (calcularMargem).
- * Sem acesso a valores (RLS esconde custos), devolve `bloqueado` em vez de um número falso.
+ * Comissão = percentual (observado no SKU, ou o configurado) × preço + tarifa fixa por
+ * unidade (observada no SKU, ou a média da loja). Tarifa não medida fica de fora e a linha
+ * diz isso. Sem acesso a valores (RLS esconde custos), devolve `bloqueado`.
  */
-export function margemUnitaria(row, { custo, cfg, venda, podeVerValores }) {
+export function margemUnitaria(row, { custo, cfg, venda, podeVerValores, tarifaLoja = null }) {
   if (!podeVerValores) return { bloqueado: true }
   if (row.preco == null) return { mc: null, mcPct: null, faltando: ['preço do anúncio'], linhas: null }
-  const taxa = taxaComissaoObservada(venda)
+  const taxaReal = taxaComissaoObservada(venda)
+  const taxaCfg = cfg?.commission_pct == null || !Number.isFinite(Number(cfg.commission_pct)) ? null : Number(cfg.commission_pct) / 100
+  const taxa = taxaReal ?? taxaCfg
+  const fonte = taxaReal != null ? 'magalu' : taxaCfg != null ? 'percentual' : null
+  const tarifaSku = tarifaFixaObservada(venda)
+  const tarifa = tarifaSku ?? tarifaLoja
+  const fonteTarifa = tarifaSku != null ? 'sku' : tarifaLoja != null ? 'loja' : null
+  const comissaoPct = taxa == null ? null : row.preco * taxa
+  const comissao = comissaoPct == null ? null : comissaoPct + (tarifa ?? 0)
   const r = calcularMargem(
-    { receita: row.preco, unidades: 1, comissao: taxa == null ? null : row.preco * taxa, itensSemComissao: taxa == null ? 1 : 0 },
-    custo, cfg,
+    { receita: row.preco, unidades: 1, comissao, itensSemComissao: comissao == null ? 1 : 0 },
+    custo, { ...cfg, commission_pct: null },
   )
-  const pctDe = (v) => (v == null || row.preco <= 0 ? null : (v / row.preco) * 100)
   return {
     mc: r.mc,
     mcPct: r.mcPct,
     faltando: r.faltando,
     semFrete: r.semFrete,
     linhas: {
-      comissao: { valor: r.componentes.comissao, pct: pctDe(r.componentes.comissao), fonte: r.fonteComissao },
+      comissao: { valor: comissaoPct, pct: taxa == null ? null : taxa * 100, fonte },
+      tarifa: { valor: comissao == null ? null : tarifa, fonte: fonteTarifa },
       frete: { valor: r.componentes.frete, pct: cfg?.freight_pct ?? null },
       custo: { valor: r.componentes.custo },
       imposto: { valor: r.componentes.imposto, pct: cfg?.tax_pct ?? null },
@@ -100,6 +129,7 @@ export function margemUnitaria(row, { custo, cfg, venda, podeVerValores }) {
 export function enriquecerSkus(rows, { vendas = new Map(), custos = new Map(), cfg = null, podeVerValores = false } = {}) {
   const porGrupo = new Map()
   for (const r of rows) if (r.grupoId) porGrupo.set(r.grupoId, (porGrupo.get(r.grupoId) ?? 0) + 1)
+  const tarifaLoja = tarifaFixaDaLoja(vendas)
   return rows.map((r) => {
     const venda = vendas.get(r.sku) ?? null
     const custo = podeVerValores && custos.has(r.sku) ? custos.get(r.sku) : null
@@ -110,7 +140,7 @@ export function enriquecerSkus(rows, { vendas = new Map(), custos = new Map(), c
       custo,
       temCusto: custo != null,
       tamanhoFamilia: r.grupoId ? porGrupo.get(r.grupoId) : 1,
-      margem: margemUnitaria(r, { custo, cfg, venda, podeVerValores }),
+      margem: margemUnitaria(r, { custo, cfg, venda, podeVerValores, tarifaLoja }),
     }
   })
 }
