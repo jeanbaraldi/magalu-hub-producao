@@ -59,8 +59,8 @@ export function useCatalogoData() {
   }, [daConta, estado.pedidos])
 
   const rows = useMemo(
-    () => (daConta ? mapCatalogo(estado.skus, gestao.custos, vendas30, gestao.cfg, { podeVerValores: gestao.podeVerValores }) : []),
-    [daConta, estado.skus, gestao.custos, vendas30, gestao.cfg, gestao.podeVerValores],
+    () => (daConta ? mapCatalogo(estado.skus, gestao.custos, vendas30, gestao.cfg, { podeVerValores: gestao.podeVerValores, reais: gestao.reais }) : []),
+    [daConta, estado.skus, gestao.custos, vendas30, gestao.cfg, gestao.podeVerValores, gestao.reais],
   )
 
   const hoje = diaBrt(new Date().toISOString())

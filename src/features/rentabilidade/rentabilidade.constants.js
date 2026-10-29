@@ -6,6 +6,7 @@ export const CORES = {
   custo: '#64748b',
   frete: '#06b6d4',
   imposto: '#8b5cf6',
+  mdr: '#ec4899',
   lucro: '#10b981',
   prejuizo: '#ef4444',
 }

@@ -50,3 +50,23 @@ export function lerSkus(accountId) {
   return lerTudo('skus', 'sku, title, status, price, list_price, stock, image_url, synced_at',
     (q) => q.eq('account_id', accountId).order('sku', { ascending: true }))
 }
+
+/**
+ * Dispara o magalu-sync da loja com a sessão do usuário. Lança com a mensagem da
+ * função quando a resposta não é 2xx; devolve o corpo como veio.
+ */
+export async function dispararSync({ supabaseUrl, anonKey, accountId, kind = 'all', days = 30 }) {
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch(`${supabaseUrl}/functions/v1/magalu-sync`, {
+    method: 'POST',
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${session?.access_token ?? anonKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ account_id: accountId, kind, days }),
+  })
+  const corpo = await res.json().catch(() => null)
+  if (!res.ok) throw new Error(corpo?.message ?? corpo?.error ?? `HTTP ${res.status}`)
+  return corpo
+}

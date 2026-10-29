@@ -2,15 +2,14 @@
  * Anúncios e Produtos do Gestor Magalu no formato do Gestor ML. Funções PURAS.
  *
  * Na Magalu o SKU é o anúncio: um cadastro, um preço, um estoque. As duas telas olham o mesmo
- * SKU com recortes diferentes: Anúncios mostra a margem por unidade no preço atual; Produtos
- * (Catálogo) mostra a contribuição de 30 dias. As duas usam `calcularMargem` (margem.js), a
- * regra única do app. Ausência de dado nunca vira zero.
+ * SKU com recortes diferentes: Anúncios (features/anuncios) mostra a margem por unidade no preço atual;
+ * Produtos (Catálogo) mostra a contribuição de 30 dias. As duas usam `calcularMargem` com o
+ * custo real do SKU (margem.js), a regra única do app. Ausência de dado nunca vira zero.
  */
-import { calcularMargem, curvaAbc } from '../magalu/margem'
+import { calcularMargem, curvaAbc, custoRealDoSku } from '../magalu/margem'
 import { STATUS_CARD } from './catalogo.constants'
 
 const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
-const fracao = (pct) => (pct == null || !Number.isFinite(Number(pct)) ? null : Number(pct) / 100)
 
 export function statusCard(status) {
   if (!status) return { label: 'Sem status', cls: 'text-slate-600 bg-slate-50' }
@@ -19,43 +18,15 @@ export function statusCard(status) {
 }
 
 /**
- * Margem por unidade no preço atual (card de Anúncios).
- * Comissão: a taxa efetiva que a Magalu cobrou nos itens de 30 dias, aplicada ao preço; sem
- * venda (ou algum item sem comissão), o % configurado em Impostos. Custo, imposto e frete
- * como em calcularMargem. Componente desconhecido deixa a margem nula e diz o que falta.
- */
-export function margemUnitaria(preco, custo, venda, cfg) {
-  const faltando = []
-  if (preco == null) faltando.push('preço')
-  if (custo == null) faltando.push('custo do produto')
-  const imposto = fracao(cfg?.tax_pct)
-  if (imposto == null) faltando.push('alíquota de imposto')
-  const frete = fracao(cfg?.freight_pct)
-  const comissaoReal = venda && venda.receita > 0 && venda.itensSemComissao === 0 && venda.itensSemValor === 0
-  const taxaComissao = comissaoReal ? venda.comissao / venda.receita : fracao(cfg?.commission_pct)
-  if (taxaComissao == null) faltando.push('comissão da Magalu')
-  const parts = {
-    comissao: preco == null || taxaComissao == null ? null : preco * taxaComissao,
-    comissaoPct: taxaComissao == null ? null : taxaComissao * 100,
-    fonteComissao: comissaoReal ? 'magalu' : taxaComissao == null ? null : 'percentual',
-    frete: preco == null || frete == null ? null : preco * frete,
-    custo,
-    impostos: preco == null || imposto == null ? null : preco * imposto,
-  }
-  if (faltando.length) return { mc: null, mcPct: null, faltando, parts, preco, semFrete: frete == null }
-  const mc = preco - parts.comissao - (parts.frete ?? 0) - custo - parts.impostos
-  return { mc, mcPct: preco > 0 ? (mc / preco) * 100 : null, faltando, parts, preco, semFrete: frete == null }
-}
-
-/**
  * Uma linha por SKU do catálogo.
  * @param {Array<object>} skus linhas de magalu.skus
  * @param {Map<string, number>} custos magalu.sku_costs
  * @param {{ linhas: Array<object> }|null} vendas agregarPorSku dos pedidos de 30 dias (null = não carregou)
  * @param {object|null} cfg account_settings
- * @param {{ podeVerValores?: boolean }} opts
+ * @param {{ podeVerValores?: boolean, reais?: object|null }} opts reais = custosReaisPorSku (frete e
+ *   intermediação medidos na análise financeira; mesma regra de Anúncios)
  */
-export function mapCatalogo(skus, custos, vendas, cfg, { podeVerValores = false } = {}) {
+export function mapCatalogo(skus, custos, vendas, cfg, { podeVerValores = false, reais = null } = {}) {
   const porSku = new Map((vendas?.linhas ?? []).map((l) => [l.sku, l]))
   const linhas = skus.map((r) => {
     const sku = String(r.sku)
@@ -67,7 +38,7 @@ export function mapCatalogo(skus, custos, vendas, cfg, { podeVerValores = false 
     const unidades = vendas == null ? null : (v?.unidades ?? 0)
     const receita = vendas == null ? null : (v?.receita ?? 0)
     // Contribuição de 30 dias: só com venda (sem venda não há o que somar, nem zero).
-    const m30 = v && v.unidades > 0 && podeVerValores ? calcularMargem(v, custo, cfg) : null
+    const m30 = v && v.unidades > 0 && podeVerValores ? calcularMargem(v, custo, cfg, custoRealDoSku(reais, sku)) : null
     return {
       sku,
       titulo: r.title?.trim() || sku,
@@ -87,7 +58,6 @@ export function mapCatalogo(skus, custos, vendas, cfg, { podeVerValores = false 
       contribuicao30: m30?.mc ?? null,
       margem30: m30?.mcPct ?? null,
       faltando30: m30?.faltando ?? [],
-      unit: podeVerValores ? margemUnitaria(preco, custo, v, cfg) : null,
     }
   })
   // Curva ABC pela receita de 30 dias, régua da suíte.
@@ -121,18 +91,6 @@ export function filtrarCatalogo(rows, { aba = 'todos', busca = '' } = {}) {
 const desc = (a, b) => (a == null ? (b == null ? 0 : 1) : b == null ? -1 : b - a)
 const asc = (a, b) => (a == null ? (b == null ? 0 : 1) : b == null ? -1 : a - b)
 
-export function ordenarAnuncios(rows, ordem) {
-  const out = [...rows]
-  switch (ordem) {
-    case 'titulo': return out.sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR'))
-    case 'maior_preco': return out.sort((a, b) => desc(a.preco, b.preco))
-    case 'menor_preco': return out.sort((a, b) => asc(a.preco, b.preco))
-    case 'menor_estoque': return out.sort((a, b) => asc(a.estoque, b.estoque))
-    case 'maior_margem': return out.sort((a, b) => desc(a.unit?.mcPct ?? null, b.unit?.mcPct ?? null))
-    default: return out.sort((a, b) => desc(a.vendas30, b.vendas30) || desc(a.receita30, b.receita30))
-  }
-}
-
 export function ordenarCatalogo(rows, ordem) {
   const out = [...rows]
   switch (ordem) {
@@ -141,17 +99,6 @@ export function ordenarCatalogo(rows, ordem) {
     case 'vendas': return out.sort((a, b) => desc(a.vendas30, b.vendas30))
     case 'nome': return out.sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR'))
     default: return out.sort((a, b) => desc(a.receita30, b.receita30))
-  }
-}
-
-/** Barra de resumo de Anúncios (mesma do Gestor ML). */
-export function resumoAnuncios(rows) {
-  const comPreco = rows.filter((r) => r.preco != null)
-  return {
-    total: rows.length,
-    estoque: rows.reduce((s, r) => s + (r.estoque ?? 0), 0),
-    precoMedio: comPreco.length ? comPreco.reduce((s, r) => s + r.preco, 0) / comPreco.length : null,
-    vendidos30: rows.reduce((s, r) => s + (r.vendas30 ?? 0), 0),
   }
 }
 

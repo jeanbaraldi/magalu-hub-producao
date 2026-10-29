@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1"
-import { dinheiro, estoqueDaResposta, mapPedido, mapSku, pedidoContaComoVenda, precoDaResposta, CANAL_MAGALU } from "./logic.ts"
+import { dinheiro, estoqueDaResposta, mapPedido, mapSku, pedidoContaComoVenda, pedidosMudados, precoDaResposta, CANAL_MAGALU, janelas15Dias, mapTransacoes, semRepetidas, versaoMaisRecente } from "./logic.ts"
 
 const AGORA = "2026-10-21T12:00:00.000Z"
 const brl = (centavos: number) => ({ total: centavos, normalizer: 100, currency: "BRL" })
@@ -82,4 +82,58 @@ Deno.test("pedidoContaComoVenda: new e cancelado não contam", () => {
   assertEquals(pedidoContaComoVenda(null), false)
   assertEquals(pedidoContaComoVenda("approved"), true)
   assertEquals(pedidoContaComoVenda("finished"), true)
+})
+
+Deno.test("pedidosMudados: grava só pedido novo, mudado ou sem updated_at", () => {
+  const ped = (id: string, updated_at?: string) => mapPedido("t1", { id, status: "approved", updated_at }, AGORA)!
+  const linhas = [ped("igual", "2026-10-21T10:00:00+00:00"), ped("mudou", "2026-10-21T11:00:00+00:00"), ped("novo", "x"), ped("sem-data")]
+  const gravados = new Map<string, string | null>([["igual", "2026-10-21T10:00:00+00:00"], ["mudou", "2026-10-21T10:00:00+00:00"], ["sem-data", null]])
+  assertEquals(pedidosMudados(linhas, gravados).map((l) => l.order_id), ["mudou", "novo", "sem-data"])
+})
+
+
+Deno.test("mapTransacoes: valor em reais, sku do frete compartilhado pelo item", () => {
+  const pedido = {
+    extras: { order_code: "123", order_date: "2026-10-10T01:00:00Z" },
+    transactions: [
+      { type: "CREDIT", category: "SALE", subcategory: "PRODUCT", identifier: "sale_amount|it1|d1", value: 10000, normalizer: 100,
+        entity: { id: "it1", type: "ITEM", extras: { sku: "A1", quantity: 2, delivery_id: "d1" } } },
+      { type: "DEBIT", category: "SHIPPING_SHARE", subcategory: "FREIGHT", identifier: "shared_freight|it1|d1", value: 1273, normalizer: 100,
+        entity: { id: "it1", type: "ITEM" } },
+      { type: "DEBIT", category: "FEES", identifier: "sem_normalizer", value: 10 },
+      { type: "DEBIT", category: "REFUND", subcategory: "ORDER", identifier: "refund_total|123", value: 500, normalizer: 100,
+        entity: { id: "123", type: "ORDER" } },
+    ],
+  }
+  const { linhas, descartadas } = mapTransacoes("L1", pedido, "agora")
+  if (descartadas !== 1) throw new Error(`descartadas ${descartadas}`)
+  const frete = linhas.find((l) => l.identifier.startsWith("shared_freight"))!
+  if (frete.sku !== "A1" || frete.value !== 12.73) throw new Error(JSON.stringify(frete))
+  const venda = linhas.find((l) => l.category === "SALE")!
+  if (venda.quantity !== 2 || venda.value !== 100) throw new Error(JSON.stringify(venda))
+  const reembolso = linhas.find((l) => l.category === "REFUND")!
+  if (reembolso.sku !== null) throw new Error("reembolso do pedido não tem sku")
+})
+
+Deno.test("janelas15Dias cobre o período sem passar de 15 dias", () => {
+  const agora = Date.parse("2026-10-22T00:00:00Z")
+  const js = janelas15Dias(60, agora)
+  if (js[0].ate !== agora) throw new Error("começa no agora")
+  if (js[js.length - 1].de !== agora - 60 * 86_400_000) throw new Error("termina no início")
+  for (const j of js) if (j.ate - j.de >= 15 * 86_400_000) throw new Error("janela grande demais")
+})
+
+Deno.test("semRepetidas fica com a última linha da mesma chave", () => {
+  const base = { order_code: "1", identifier: "x" } as any
+  const r = semRepetidas([{ ...base, value: 1 }, { ...base, value: 2 }, { order_code: "2", identifier: "x", value: 3 } as any])
+  if (r.length !== 2 || r[0].value !== 2) throw new Error(JSON.stringify(r))
+})
+
+Deno.test("versaoMaisRecente: um registro por pedido, o de updated_at mais novo", () => {
+  const r = versaoMaisRecente([
+    { id: "a", extras: { order_code: "1" }, updated_at: "2026-10-14T00:00:00Z" },
+    { id: "b", extras: { order_code: "1" }, updated_at: "2026-10-12T00:00:00Z" },
+    { id: "c", extras: { order_code: "2" }, updated_at: "2026-10-12T00:00:00Z" },
+  ]) as any[]
+  if (r.length !== 2 || r.find((x) => x.extras.order_code === "1").id !== "a") throw new Error(JSON.stringify(r))
 })

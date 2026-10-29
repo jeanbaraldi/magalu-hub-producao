@@ -3,7 +3,7 @@
  * Também é a base de linhas por SKU usada por Lucratividade e Rentabilidade.
  */
 import { agregarPorSku } from '../magalu/itens'
-import { calcularMargem, curvaAbc } from '../magalu/margem'
+import { calcularMargem, curvaAbc, custoRealDoSku } from '../magalu/margem'
 import { inicioDoPeriodo } from '../magalu/vendas'
 import { TENDENCIA_DIAS, TENDENCIA_LIMIAR_PCT } from './performance.constants'
 
@@ -29,7 +29,7 @@ export function indexarCatalogo(skus) {
  * Sem acesso a valores (`podeVerValores=false`), a margem não é calculada: fica null
  * com o motivo "sem acesso" — nunca zero.
  */
-export function montarLinhas(pedidos, { catalogo = new Map(), custos = new Map(), cfg = null, podeVerValores = false } = {}) {
+export function montarLinhas(pedidos, { catalogo = new Map(), custos = new Map(), cfg = null, reais = null, podeVerValores = false } = {}) {
   const { linhas, semSku } = agregarPorSku(pedidos)
   const rows = linhas.map((l) => {
     const cat = catalogo.get(l.sku)
@@ -43,10 +43,10 @@ export function montarLinhas(pedidos, { catalogo = new Map(), custos = new Map()
       custoUnit: custos.has(l.sku) ? custos.get(l.sku) : null,
     }
     if (!podeVerValores) {
-      return { ...base, mc: null, mcPct: null, faltando: ['sem acesso a custos e margem'], componentes: { custo: null, comissao: null, imposto: null, frete: null }, semFrete: true }
+      return { ...base, mc: null, mcPct: null, faltando: ['sem acesso a custos e margem'], componentes: { custo: null, comissao: null, imposto: null, frete: null, mdr: null }, semFrete: true, semMdr: true }
     }
-    const m = calcularMargem(l, base.custoUnit, cfg)
-    return { ...base, mc: m.mc, mcPct: m.mcPct, faltando: m.faltando, componentes: m.componentes, semFrete: m.semFrete, fonteComissao: m.fonteComissao }
+    const m = calcularMargem(l, base.custoUnit, cfg, custoRealDoSku(reais, l.sku))
+    return { ...base, mc: m.mc, mcPct: m.mcPct, faltando: m.faltando, componentes: m.componentes, semFrete: m.semFrete, semMdr: m.semMdr, fonteComissao: m.fonteComissao, fonteFrete: m.fonteFrete }
   })
   return { rows, semSku }
 }
@@ -72,13 +72,13 @@ function receitaPorSku(pedidos) {
  * @param {number} p.dias período em dias
  * @param {string} p.agora ISO do momento da leitura
  */
-export function mapPerformance({ pedidos = [], skus = [], custos, cfg, podeVerValores, dias, agora }) {
+export function mapPerformance({ pedidos = [], skus = [], custos, cfg, reais = null, podeVerValores, dias, agora }) {
   const ref = agora ? new Date(agora) : new Date(0)
   const inicio = inicioDoPeriodo(dias, ref)
   const inicio7 = inicioDoPeriodo(TENDENCIA_DIAS, ref)
   const inicio14 = inicioDoPeriodo(TENDENCIA_DIAS * 2, ref)
 
-  const { rows: base, semSku } = montarLinhas(pedidosNaJanela(pedidos, inicio), { catalogo: indexarCatalogo(skus), custos, cfg, podeVerValores })
+  const { rows: base, semSku } = montarLinhas(pedidosNaJanela(pedidos, inicio), { catalogo: indexarCatalogo(skus), custos, cfg, reais, podeVerValores })
   const rec7 = receitaPorSku(pedidosNaJanela(pedidos, inicio7))
   const rec7ant = receitaPorSku(pedidosNaJanela(pedidos, inicio14, inicio7))
 
@@ -117,7 +117,7 @@ export function filtrarPerformance(rows, { busca = '', curva = 'todas' } = {}) {
 const VALOR_ORDEM = {
   receita: (r) => r.receita, unidades: (r) => r.unidades, ticket: (r) => r.ticket,
   custo: (r) => r.componentes.custo, comissao: (r) => r.componentes.comissao, imposto: (r) => r.componentes.imposto,
-  frete: (r) => r.componentes.frete, mc: (r) => r.mc, mcPct: (r) => r.mcPct,
+  frete: (r) => r.componentes.frete, mdr: (r) => r.componentes.mdr, mc: (r) => r.mc, mcPct: (r) => r.mcPct,
   tendencia: (r) => r.tendencia?.pct, titulo: (r) => (r.titulo ?? r.sku).toLowerCase(),
 }
 

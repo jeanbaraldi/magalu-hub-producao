@@ -21,25 +21,85 @@ Telas que só dependem de pedidos e catálogo: **Vendas Hoje**, **Tarefas**, **P
 - Regras únicas em `src/features/magalu/`: `itens.js` (itens do pedido e agregação por SKU),
   `margem.js` (`calcularMargem` e `curvaAbc`, régua 80/95 da suíte), `useGestaoConfig.js`.
 - **Comissão vem da Magalu** em cada item do pedido; o % de Impostos só cobre item sem ela.
-  Frete fica como % informado. Sem custo, comissão ou imposto, a margem é INDISPONÍVEL
+  ⚠️ **Os itens NÃO trazem a tarifa fixa por unidade** (medido 22/10/2026: R$ 5,00 ou R$ 5,50,
+  sempre o mesmo valor por SKU). Ela só aparece no `amounts.commission` do PEDIDO, que é
+  itens + tarifa. `itensDoPedido` separa a diferença (`tarifaFixa`, rateada por unidade) e
+  `agregarPorSku` soma as duas em `comissao`. Sem a comissão do pedido ou com entrega
+  cancelada, a tarifa é desconhecida e o item conta em `itensSemComissao`.
+- **Frete do vendedor não vem nos pedidos**: `amounts.freight` é o que o COMPRADOR pagou e
+  `freight.shared` veio vazio em todos os pedidos. O custo real de frete por pedido só existe
+  na API `financial-analysis` (escopo `open:order-financial-report-seller:read`, AVAILABLE no
+  client desde 22/10/2026 e pedido no login; cada loja precisa reconectar para o token ter o
+  escopo). Desde 22/10/2026 é lida (ver "Análise financeira" abaixo); SKU sem medição usa o
+  frete % de Impostos. Sem custo, comissão ou imposto, a margem é INDISPONÍVEL
   (com o motivo), nunca zero.
 - A receita das telas por SKU soma os ITENS; a de Pedidos/Dashboard soma o total do pedido.
   Podem divergir se o pedido tiver frete/desconto fora dos itens.
 - Ainda não feito (depende da API conferida): Campanhas/Ads, Promoções, Perguntas,
   Devoluções, Reclamações, Recebíveis, Estoque Full.
 
-## Anúncios e Produtos no formato do Gestor ML e da Shopee (29/10/2026)
-- Uma fonte só: `src/features/catalogo/` (`catalogo.mapper.js`, `diagnostico.mapper.js`, hook
-  `useCatalogoData`). As duas páginas leem dela.
-- **Anúncios**: barra de resumo, abas Todos / Ativos / Com custo / Sem custo / Não publicados,
-  busca, ordenação e cards com margem por unidade (preço − comissão − frete − custo − imposto).
-- **Produtos**: abas **Catálogo** (receita, contribuição e margem por SKU em 30 dias),
+## Análise financeira: frete real e intermediação (22/10/2026)
+`magalu-sync` `kind: "financeiro"` lê `GET /seller/v1/financial-analysis/orders` (par de datas
+`updated_at__gte/lte`, janela máxima de 15 dias: o período é lido em janelas) e grava cada
+transação em `magalu.financial_transactions` (PK conta + código do pedido + `identifier`).
+Cron `magalu-sync-financeiro` 1x/dia, 15 dias; backfill com `days: 60`.
+- Categorias medidas: SALE/PRODUCT (crédito, = itens × preço), FEES/PLATFORM (tarifa fixa),
+  FEES/PAYMENT_PROCESSING (MDR ~4%), COMMISSION/*, SHIPPING_SHARE e SHIPPING_COST (frete do
+  vendedor), DISCOUNT, PROMOTION (débito do vendedor / crédito de subsídio), REFUND (sem SKU).
+- ⚠️ **O frete compartilhado vem SEM sku**: só `entity.id` do item. `mapTransacoes` resolve
+  pelo mesmo id nas outras transações do pedido.
+- View `magalu.v_custos_reais_sku` (security_invoker, hoje 12 meses): unidades, venda, frete e MDR por
+  SKU. `custosReaisPorSku`/`custoRealDoSku` (`margem.js`) viram frete por unidade e taxa de
+  MDR; `calcularMargem(venda, custo, cfg, real)` usa o medido antes do frete %. SKU sem medição:
+  frete cai no %, MDR na média da loja; MDR desconhecido fica fora da conta e marcado `semMdr`.
+- A margem de Anúncios, Performance, Lucratividade e Rentabilidade passou a descontar o MDR,
+  que antes não entrava: as margens caem ~4 pontos onde ele é medido.
+- **Histórico de 12 meses e estimativa para quem nunca vendeu** (migration `20261026120000`):
+  a view cobre 365 dias e traz a comissão (COMMISSION/*). Backfill em partes com
+  `{"kind":"financeiro","days":180,"skip_days":N}` (`days` até 365 neste kind). Medido em
+  22/10/2026: das 166 publicadas, só 50 tinham alguma venda. SKU sem venda recebe, nesta ordem:
+  frete = média por unidade dos SKUs MEDIDOS da loja na mesma faixa de peso cobrado
+  (`pesoCobradoG`: maior entre peso e C×L×A÷6000; faixas 1/2/5/10 kg; mínimo 2 SKUs), senão o
+  % médio de frete da loja sobre a venda; comissão e MDR = média da loja. Tudo rotulado
+  "estimado"/"média da loja" (`fonteFrete: 'estimado'`, `comissao.fonte: 'loja'`).
+
+## Vendas Hoje "ao vivo" (24/10/2026)
+Mesmo formato do Ao vivo da Shopee: cabeçalho azul com receita do dia, variação vs ontem até a
+mesma hora, tiles Pedidos/Unidades/Ticket/Última venda, e barras por hora Passado/Agora/Futuro.
+- **Ao vivo de verdade:** cron `magalu-sync-pedidos-ao-vivo` busca os pedidos do dia a cada
+  minuto (o de 30 min segue como rede de segurança dos 3 dias). O sync só grava pedido cujo
+  `updated_at` mudou (`pedidosMudados`), então o Realtime só dispara com venda nova. A tela
+  ainda busca ao abrir (throttle de 2 min por loja) e o botão Atualizar força.
+- O card da Magalu na Visão geral do Hub ouve o mesmo Realtime (`TABELAS_AO_VIVO` do Hub).
+- **Realtime** em `magalu.orders` (migration `20261024120000`): pedido gravado pelo sync repinta
+  em ~1,5 s. A releitura do espelho a cada 30 s é a rede de segurança se a publicação faltar.
+- Erro do sync vem DENTRO de um 200 por loja (`erroDoSync`): a tela diz e segue mostrando o espelho.
+- `dispararSync` (`magaluDb.js`) é a chamada única ao `magalu-sync`, usada também em Configurações.
+
+## Anúncios no formato do Gestor ML (24/10/2026)
+`/anuncios`: faixa de resumo, abas Todos/Ativos/Com custo/Sem custo/Não publicados (sub-filtros
+em Ativos), busca por título/SKU/marca, ordenação, visão Grade ou Famílias (`payload.group.id`),
+e card com fotos, status, Full, vendidos 30d, preço com desconto, estoque e **margem por
+unidade no preço atual** (`margemUnitaria` → `calcularMargem`, a regra única).
+- Comissão: taxa REAL das vendas de 30 dias do SKU (comissão ÷ receita, só com todos os itens
+  completos); sem ela, o % configurado em Impostos. Ads da Magalu não integrado ("não integrado").
+- Sem custo cadastrado a margem é indisponível e o card pede o cadastro (em `/produtos`).
+  Sem papel financeiro/admin o bloco diz que o acesso não inclui custos.
+- O hook lê só os campos do payload que o card usa (alias no select): o payload inteiro
+  passa de 5 MB numa loja de 2.300 SKUs.
+- "Sincronizar com a Magalu" roda o `magalu-sync` `kind: skus`; rodada cortada pelo tempo é PARCIAL.
+## Produtos no formato do Gestor ML e da Shopee (29/10/2026)
+- `/produtos` tem as abas **Catálogo** (receita, contribuição e margem por SKU em 30 dias),
   **Diagnóstico** (7 sinais do Gestor ML; sem os de visitas, que a Magalu não entrega) e
-  **Custos** (a tabela de custo por SKU e a importação em massa de antes).
+  **Custos** (a tabela de custo por SKU e a importação em massa de antes, `pages/produtos/CustosAba.jsx`).
+- Fonte: `src/features/catalogo/` (`catalogo.mapper.js`, `diagnostico.mapper.js`, hook
+  `useCatalogoData`). A contribuição usa `calcularMargem` com `custoRealDoSku` (frete e
+  intermediação medidos), a mesma regra de Anúncios.
 - "Puxar custos da Precificação" chama `precificacao.sincronizar_loja('magalu', conta)`, que
-  grava em `magalu.sku_costs` o custo real do SKU. A rotina diária da Precificação faz o mesmo
-  sozinha. Sem a migration `20261029170000` da Precificação aplicada, o botão mostra o erro.
-- Componente de render tem teste com `renderToString` (`catalogo.render.test.jsx`).
+  grava em `magalu.sku_costs` o custo real do SKU. A rotina diária da Precificação
+  (`precificacao-sincronizar-lojas`, 07:20 UTC) faz o mesmo sozinha.
+- Componentes de render têm teste com `renderToString` (`catalogo.render.test.jsx`).
+
 
 ## Regras que valem aqui (as mesmas do Gestor ML)
 - **Arquitetura de 3 camadas:** página fina (`src/pages`) → `src/features/<x>/` (constantes,
@@ -109,9 +169,11 @@ seller e módulo; teto de 5.000 no offset relatado por integradores (o sync para
 **Telas que faltam e as specs delas:** Campanhas (`campaign.ads`, `metric.ads`,
 `financial.ads`), Promoções (`promotions`), Perguntas (`questions`, em `services.magalu.com`),
 Devoluções/Reclamações (`sac.yaml`), Recebíveis (`financial-analysis`: CREDIT soma, DEBIT
-subtrai, INFORMATIVE fora, janela máx. 15 dias), Estoque fulfillment (`stock`). Cada uma pede
-escopo próprio: só acrescentar o escopo junto da tela, porque escopo não habilitado no app
-pode derrubar o login.
+subtrai, INFORMATIVE fora, janela máx. 15 dias), Estoque fulfillment (`stock`).
+**Escopos (22/10/2026):** os de leitura dessas telas já estão AVAILABLE no client e pedidos no
+login (`MAGALU_ESCOPOS_PADRAO`); a lista certa sai de `idm scope list` (singular). **Magalu Ads
+não existe no catálogo do IDM**: `add-scope` com `open:ads-*` responde "do not belong to a
+public API product". Escopo que o client não tem derruba o login: confira antes de acrescentar.
 
 ## Comandos
 `npm run dev` · `npm run build` · `npm test` (lista de functions + vitest) ·

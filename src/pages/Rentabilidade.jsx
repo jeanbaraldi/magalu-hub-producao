@@ -37,7 +37,7 @@ export default function Rentabilidade() {
       <div className="p-4 sm:p-6 lg:p-8 space-y-5">
         <ChipGroup ariaLabel="Período" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
         {error && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">Erro ao carregar rentabilidade: {error}</div>}
-        <AvisoMargem podeVerValores={podeVerValores} cfg={cfg} semCusto={semCusto} comissaoCompleta={dre.comissaoCompleta} loading={loading} />
+        <AvisoMargem podeVerValores={podeVerValores} cfg={cfg} semCusto={semCusto} comissaoCompleta={dre.comissaoCompleta} freteMedido={dre.freteMedido} loading={loading} />
         <LucroResumo dre={dre} loading={loading} />
         {!loading && (
           <>
@@ -48,7 +48,7 @@ export default function Rentabilidade() {
             </div>
           </>
         )}
-        <p className="text-xs text-slate-400">Comissão é a informada pela Magalu em cada item (o % de Impostos só cobre item sem ela); imposto e frete são percentuais sobre a receita; custo é o cadastrado em Produtos × unidades vendidas. O lucro só aparece quando todos os componentes obrigatórios são conhecidos para todo o período.</p>
+        <p className="text-xs text-slate-400">Comissão é a informada pela Magalu em cada item (o % de Impostos só cobre item sem ela); imposto é percentual sobre a receita; frete e intermediação (MDR) são os cobrados pela Magalu na análise financeira (média por unidade dos últimos 60 dias de cada SKU), e o frete% de Impostos só cobre SKU sem medição; custo é o cadastrado em Produtos × unidades vendidas. O lucro só aparece quando todos os componentes obrigatórios são conhecidos para todo o período.</p>
       </div>
     </div>
   )

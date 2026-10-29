@@ -21,6 +21,7 @@ export default function Lucratividade() {
   const visiveis = useMemo(() => filtrarLucratividade(rows, { busca, faixa }), [rows, busca, faixa])
   const semCusto = useMemo(() => rows.filter((r) => r.custoUnit == null).length, [rows])
   const comissaoCompleta = useMemo(() => rows.length > 0 && rows.every((r) => r.itensSemComissao === 0), [rows])
+  const freteMedido = useMemo(() => rows.some((r) => r.fonteFrete === 'magalu' || r.fonteFrete === 'estimado'), [rows])
 
   if (!isConnected) {
     return (
@@ -45,7 +46,7 @@ export default function Lucratividade() {
       <div className="p-4 sm:p-6 lg:p-8 space-y-5">
         <ChipGroup ariaLabel="Período" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
         {error && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">Erro ao carregar lucratividade: {error}</div>}
-        <AvisoMargem podeVerValores={podeVerValores} cfg={cfg} semCusto={semCusto} comissaoCompleta={comissaoCompleta} loading={loading} />
+        <AvisoMargem podeVerValores={podeVerValores} cfg={cfg} semCusto={semCusto} comissaoCompleta={comissaoCompleta} freteMedido={freteMedido} loading={loading} />
         {!loading && podeVerValores && (
           <>
             <LucroKpis kpis={kpis} loading={loading} />

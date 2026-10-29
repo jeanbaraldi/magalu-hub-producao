@@ -17,6 +17,7 @@ const COLUNAS = [
   { chave: 'comissao', label: 'Comissão', valor: true },
   { chave: 'imposto', label: 'Imposto', valor: true },
   { chave: 'frete', label: 'Frete', valor: true },
+  { chave: 'mdr', label: 'Intermed.', valor: true },
   { chave: 'mc', label: 'MC R$', valor: true },
   { chave: 'mcPct', label: 'MC %', valor: true },
 ]
@@ -89,7 +90,8 @@ export default function PerformanceTable({ rows, loading, podeVerValores, ordem,
                       <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{r.custoUnit == null ? <span className="text-amber-600 text-xs">sem custo</span> : brl(r.componentes.custo)}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{brl(r.componentes.comissao)}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{brl(r.componentes.imposto)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{r.semFrete ? <span className="text-slate-400 text-xs">sem frete</span> : brl(r.componentes.frete)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{r.semFrete ? <span className="text-slate-400 text-xs">sem frete</span> : <span title={r.fonteFrete === 'magalu' ? 'Frete cobrado pela Magalu (média por unidade, 12 meses)' : r.fonteFrete === 'estimado' ? 'Frete estimado pela média da loja (SKUs de peso parecido ou % médio de frete)' : 'Frete % configurado em Impostos'}>{brl(r.componentes.frete)}</span>}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{r.semMdr ? <span className="text-slate-400 text-xs" title="Taxa de intermediação ainda não medida na análise financeira">não medida</span> : brl(r.componentes.mdr)}</td>
                       <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${corMargem(r.mcPct)}`} title={motivo}>{brl(r.mc)}</td>
                       <td className={`px-3 py-2.5 text-right tabular-nums ${corMargem(r.mcPct)}`} title={motivo}>{pct(r.mcPct)}</td>
                     </>

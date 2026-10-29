@@ -117,7 +117,7 @@ export function AppProvider({ children }) {
     if (!clientId) {
       const { data, error } = await supabase.schema('hub').rpc('credencial_publica', { p_provedor: 'magalu', p_chave: 'client_id' })
       if (error || !data) {
-        window.alert('Cadastre o Client ID da Magalu no Hub (Conexões) antes de conectar a loja.')
+        setConnectionError('Cadastre o Client ID da Magalu no Hub (Conexões) antes de conectar a loja.')
         return
       }
       clientId = data
@@ -140,10 +140,15 @@ export function AppProvider({ children }) {
   }
 
   const removeAccount = useCallback(async (id) => {
+    setConnectionError(null)
     try {
-      await callEdgeFunction('magalu-oauth', { action: 'disconnect', account_id: String(id) }, {}, session?.access_token)
-    } catch {
-      // recarrega mesmo assim
+      const res = await callEdgeFunction('magalu-oauth', { action: 'disconnect', account_id: String(id) }, {}, session?.access_token)
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        setConnectionError(`Não consegui desconectar a loja: ${data?.message ?? data?.error ?? `erro ${res.status}`}`)
+      }
+    } catch (e) {
+      setConnectionError(`Não consegui desconectar a loja: ${e?.message ?? 'falha de rede'}`)
     }
     await loadSellers()
   }, [loadSellers, session?.access_token])

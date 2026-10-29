@@ -50,6 +50,7 @@ export function useBaseVendas(diasLeitura) {
     pronto: atual && !loading,
     custos: gestao.custos,
     cfg: gestao.cfg,
+    reais: gestao.reais,
     podeVerValores: gestao.podeVerValores,
     loading: loading || (!!contaId && !atual) || gestao.loading,
     error: (atual ? estado.error : null) ?? gestao.error,

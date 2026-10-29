@@ -1,24 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { contarAbas, filtrarCatalogo, mapCatalogo, margemUnitaria, ordenarCatalogo, resumoAnuncios, totaisCatalogo } from './catalogo.mapper'
+import { contarAbas, filtrarCatalogo, mapCatalogo, ordenarCatalogo, totaisCatalogo } from './catalogo.mapper'
 
 const cfg = { tax_pct: 10, commission_pct: 20, freight_pct: null }
 const sku = (over = {}) => ({ sku: 'A1', title: 'Calha', status: 'PUBLISHED', price: 100, list_price: null, stock: 5, image_url: null, ...over })
 const venda = (over = {}) => ({ sku: 'A1', unidades: 2, receita: 200, comissao: 30, itensSemComissao: 0, itensSemValor: 0, itensSemQtd: 0, ...over })
-
-describe('margemUnitaria', () => {
-  it('usa a taxa de comissão real da Magalu no preço atual', () => {
-    const u = margemUnitaria(100, 40, venda(), cfg)
-    expect(u.parts.comissao).toBe(15) // 30/200 = 15%
-    expect(u.parts.fonteComissao).toBe('magalu')
-    expect(u.mc).toBe(100 - 15 - 40 - 10)
-  })
-  it('sem venda cai no % configurado; sem custo a margem fica nula com o motivo', () => {
-    expect(margemUnitaria(100, 40, null, cfg).parts.comissao).toBe(20)
-    const u = margemUnitaria(100, null, null, cfg)
-    expect(u.mc).toBeNull()
-    expect(u.faltando).toContain('custo do produto')
-  })
-})
 
 describe('mapCatalogo', () => {
   const custos = new Map([['A1', 40], ['B2', 0]])
@@ -45,8 +30,12 @@ describe('mapCatalogo', () => {
     expect(filtrarCatalogo(rows, { busca: 'cálha' })).toHaveLength(2)
     expect(filtrarCatalogo(rows, { aba: 'sem_custo' }).map((r) => r.sku)).toEqual(['B2'])
     expect(ordenarCatalogo(rows, 'receita')[0].sku).toBe('A1')
-    expect(resumoAnuncios(rows)).toEqual({ total: 2, estoque: 10, precoMedio: 100, vendidos30: 2 })
     expect(totaisCatalogo(rows)).toEqual({ receita: 200, unidades: 2, contribuicao: 70, pendentes: 0 })
+  })
+  it('frete e intermediação medidos na Magalu entram na contribuição (mesma regra de Anúncios)', () => {
+    const reais = { porSku: new Map([['A1', { unidades: 10, fretePorUnidade: 5, mdrPct: 0.04, comissaoPct: 0.15 }]]), mdrPctLoja: 0.04, comissaoPctLoja: 0.15, fretePctLoja: null, fretePorFaixa: [], pesos: new Map() }
+    const [a] = mapCatalogo([sku()], custos, { linhas: [venda()] }, cfg, { podeVerValores: true, reais })
+    expect(a.contribuicao30).toBeCloseTo(200 - 80 - 30 - 20 - 10 - 8)
   })
   it('contribuição total pendente se um SKU que vendeu não tem custo', () => {
     const r = mapCatalogo([sku(), sku({ sku: 'C3' })], new Map([['A1', 40]]), { linhas: [venda(), venda({ sku: 'C3' })] }, cfg, { podeVerValores: true })

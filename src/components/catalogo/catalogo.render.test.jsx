@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { renderToString } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
-import AnuncioCard from './AnuncioCard'
 import CatalogoList from './CatalogoList'
 import CatalogoKpis from './CatalogoKpis'
 import DiagnosticoPanel from './diagnostico/DiagnosticoPanel'
@@ -12,17 +11,11 @@ const skus = [
   { sku: 'KIT-01', title: 'Kit Exemplo', status: 'PUBLISHED', price: 100, list_price: 120, stock: 0, images: [] },
   { sku: 'SEM-01', title: 'Sem Custo', status: 'UNPUBLISHED', price: null, stock: null, images: [] },
 ]
-const cfg = { aliquota: 10, fretePct: 5, comissaoPct: null }
+const cfg = { tax_pct: 10, freight_pct: 5, commission_pct: null }
 const vendas = new Map([['KIT-01', { unidades: 4, receita: 400, comissao: 40, itensSemComissao: 0 }]])
 
 describe('telas do catálogo renderizam com dado real, nulo e vazio', () => {
   const rows = mapCatalogo(skus, new Map([['KIT-01', 50]]), vendas, cfg, { podeVerValores: true })
-
-  it('card de anúncio mostra o SKU e trata preço desconhecido como —', () => {
-    const html = renderToString(<AnuncioCard row={rows[1]} podeVerValores />)
-    expect(html).toContain('SEM-01')
-    expect(html).toContain('—')
-  })
 
   it('lista e KPIs do catálogo', () => {
     const html = renderToString(

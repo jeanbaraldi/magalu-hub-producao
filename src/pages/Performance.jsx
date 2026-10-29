@@ -19,6 +19,7 @@ export default function Performance() {
   const visiveis = useMemo(() => ordenarPerformance(filtrarPerformance(rows, { busca, curva }), ordem.chave, ordem.dir), [rows, busca, curva, ordem])
   const semCusto = useMemo(() => rows.filter((r) => r.custoUnit == null).length, [rows])
   const comissaoCompleta = useMemo(() => rows.length > 0 && rows.every((r) => r.itensSemComissao === 0), [rows])
+  const freteMedido = useMemo(() => rows.some((r) => r.fonteFrete === 'magalu' || r.fonteFrete === 'estimado'), [rows])
   const ordenar = (chave) => setOrdem((o) => ({ chave, dir: o.chave === chave && o.dir === 'desc' ? 'asc' : 'desc' }))
 
   if (!isConnected) {
@@ -50,7 +51,7 @@ export default function Performance() {
           </div>
         </div>
         {error && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">Erro ao carregar performance: {error}</div>}
-        <AvisoMargem podeVerValores={podeVerValores} cfg={cfg} semCusto={semCusto} comissaoCompleta={comissaoCompleta} loading={loading} />
+        <AvisoMargem podeVerValores={podeVerValores} cfg={cfg} semCusto={semCusto} comissaoCompleta={comissaoCompleta} freteMedido={freteMedido} loading={loading} />
         <PerformanceKpis kpis={kpis} podeVerValores={podeVerValores} loading={loading} />
         <PerformanceTable rows={visiveis} loading={loading} podeVerValores={podeVerValores} ordem={ordem} onOrdenar={ordenar} pageSize={PAGE_SIZE} />
         <p className="text-xs text-slate-400">Curva ABC pela receita do período (A até 80%, B até 95%). Tendência: receita dos últimos 7 dias contra os 7 anteriores (±10%).</p>

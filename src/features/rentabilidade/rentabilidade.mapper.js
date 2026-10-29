@@ -1,7 +1,8 @@
 /**
  * Rentabilidade — DRE simplificado da loja no período. Funções PURAS.
  *
- *   Receita − comissão − custo dos produtos − frete − impostos = lucro
+ *   Receita − comissão − custo dos produtos − frete − intermediação − impostos = lucro
+ * Frete e intermediação (MDR): o medido na Magalu por SKU; frete sem medição usa o frete%.
  * Comissão: a informada pela Magalu em cada item; o % de Impostos só cobre o que veio sem ela.
  *
  * O lucro só existe quando TODO componente obrigatório é conhecido para TODO o período
@@ -18,7 +19,6 @@ const soma = (rows, f) => rows.reduce((s, r) => s + (f(r) ?? 0), 0)
 export function resumoDre(rows, { cfg, podeVerValores, semSku = 0, pedidosSemItens = 0 }) {
   const receita = soma(rows, (r) => r.receita)
   const impostoPct = cfg?.tax_pct ?? null
-  const fretePct = cfg?.freight_pct ?? null
   const comCusto = rows.filter((r) => r.custoUnit != null)
 
   const faltando = []
@@ -38,16 +38,25 @@ export function resumoDre(rows, { cfg, podeVerValores, semSku = 0, pedidosSemIte
   const comissao = podeVerValores && rows.length > 0 && rows.every((r) => r.componentes?.comissao != null)
     ? soma(rows, (r) => r.componentes.comissao) : null
   const imposto = podeVerValores && impostoPct != null ? receita * impostoPct / 100 : null
-  const frete = podeVerValores && fretePct != null ? receita * fretePct / 100 : null
+  // Frete e MDR somam o que é conhecido por SKU; SKU sem nenhum dos dois fica de fora e
+  // o degrau diz "parcial".
+  const comFrete = rows.filter((r) => r.componentes?.frete != null)
+  const comMdr = rows.filter((r) => r.componentes?.mdr != null)
+  const frete = podeVerValores && comFrete.length > 0 ? soma(comFrete, (r) => r.componentes.frete) : null
+  const mdr = podeVerValores && comMdr.length > 0 ? soma(comMdr, (r) => r.componentes.mdr) : null
   const custo = podeVerValores && comCusto.length > 0 ? soma(comCusto, (r) => r.componentes.custo) : null
   const completo = podeVerValores && rows.length > 0 && faltando.length === 0
-  const lucro = completo ? receita - comissao - custo - imposto - (frete ?? 0) : null
+  const lucro = completo ? receita - comissao - custo - imposto - (frete ?? 0) - (mdr ?? 0) : null
 
   const receitaComCusto = soma(comCusto, (r) => r.receita)
   return {
     receita: rows.length > 0 ? receita : null,
-    comissao, custo, custoParcial: custo != null && comCusto.length < rows.length, frete, imposto,
-    semFrete: fretePct == null,
+    comissao, custo, custoParcial: custo != null && comCusto.length < rows.length, frete, imposto, mdr,
+    freteParcial: frete != null && comFrete.length < rows.length,
+    mdrParcial: mdr != null && comMdr.length < rows.length,
+    semFrete: frete == null,
+    semMdr: mdr == null,
+    freteMedido: rows.some((r) => r.fonteFrete === 'magalu' || r.fonteFrete === 'estimado'),
     lucro,
     margem: lucro != null && receita > 0 ? (lucro / receita) * 100 : null,
     completo, faltando,
@@ -67,7 +76,8 @@ export function cascata(dre) {
     { chave: 'receita', label: 'Receita', valor: dre.receita, tipo: 'total' },
     { chave: 'comissao', label: 'Comissão', valor: dre.comissao, tipo: 'saida' },
     { chave: 'custo', label: 'Custo dos produtos', valor: dre.custo, tipo: 'saida', parcial: dre.custoParcial },
-    { chave: 'frete', label: 'Frete', valor: dre.frete, tipo: 'saida', naoConfigurado: dre.semFrete },
+    { chave: 'frete', label: 'Frete', valor: dre.frete, tipo: 'saida', naoConfigurado: dre.semFrete, parcial: dre.freteParcial },
+    { chave: 'mdr', label: 'Intermediação (MDR)', valor: dre.mdr, tipo: 'saida', naoConfigurado: dre.semMdr, parcial: dre.mdrParcial, rotuloAusente: 'não medida' },
     { chave: 'imposto', label: 'Impostos', valor: dre.imposto, tipo: 'saida' },
     { chave: 'lucro', label: 'Lucro', valor: dre.lucro, tipo: 'total' },
   ]
@@ -89,12 +99,12 @@ export function diasDoPeriodo(dias, agora) {
   return Array.from({ length: dias }, (_, i) => diaBrt(new Date(inicio + i * 86_400_000 + 3_600_000).toISOString()))
 }
 
-export function mapRentabilidade({ pedidos = [], custos, cfg, podeVerValores, dias, agora }) {
+export function mapRentabilidade({ pedidos = [], custos, cfg, reais = null, podeVerValores, dias, agora }) {
   if (!agora) {
     return { dre: resumoDre([], { cfg, podeVerValores }), cascata: [], diario: [], composicao: [] }
   }
   const noPeriodo = pedidosNaJanela(pedidos, inicioDoPeriodo(dias, new Date(agora)))
-  const opts = { custos, cfg, podeVerValores }
+  const opts = { custos, cfg, reais, podeVerValores }
   const { rows, semSku } = montarLinhas(noPeriodo, opts)
   const pedidosSemItens = noPeriodo.filter((p) => pedidoContaComoVenda(p.status) && itensDoPedido(p.payload).length === 0).length
   const dre = resumoDre(rows, { cfg, podeVerValores, semSku, pedidosSemItens })
@@ -120,6 +130,7 @@ export function mapRentabilidade({ pedidos = [], custos, cfg, podeVerValores, di
       { chave: 'comissao', name: 'Comissão', value: dre.comissao },
       { chave: 'imposto', name: 'Impostos', value: dre.imposto },
       ...(dre.frete != null ? [{ chave: 'frete', name: 'Frete', value: dre.frete }] : []),
+      ...(dre.mdr != null ? [{ chave: 'mdr', name: 'Intermediação (MDR)', value: dre.mdr }] : []),
       ...(dre.lucro > 0 ? [{ chave: 'lucro', name: 'Lucro', value: dre.lucro }] : []),
     ].filter((c) => c.value > 0).map((c) => ({ ...c, value: Math.round(c.value * 100) / 100 }))
     : []
