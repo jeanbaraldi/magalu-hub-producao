@@ -28,6 +28,19 @@ Telas que só dependem de pedidos e catálogo: **Vendas Hoje**, **Tarefas**, **P
 - Ainda não feito (depende da API conferida): Campanhas/Ads, Promoções, Perguntas,
   Devoluções, Reclamações, Recebíveis, Estoque Full.
 
+## Anúncios e Produtos no formato do Gestor ML e da Shopee (29/10/2026)
+- Uma fonte só: `src/features/catalogo/` (`catalogo.mapper.js`, `diagnostico.mapper.js`, hook
+  `useCatalogoData`). As duas páginas leem dela.
+- **Anúncios**: barra de resumo, abas Todos / Ativos / Com custo / Sem custo / Não publicados,
+  busca, ordenação e cards com margem por unidade (preço − comissão − frete − custo − imposto).
+- **Produtos**: abas **Catálogo** (receita, contribuição e margem por SKU em 30 dias),
+  **Diagnóstico** (7 sinais do Gestor ML; sem os de visitas, que a Magalu não entrega) e
+  **Custos** (a tabela de custo por SKU e a importação em massa de antes).
+- "Puxar custos da Precificação" chama `precificacao.sincronizar_loja('magalu', conta)`, que
+  grava em `magalu.sku_costs` o custo real do SKU. A rotina diária da Precificação faz o mesmo
+  sozinha. Sem a migration `20261029170000` da Precificação aplicada, o botão mostra o erro.
+- Componente de render tem teste com `renderToString` (`catalogo.render.test.jsx`).
+
 ## Regras que valem aqui (as mesmas do Gestor ML)
 - **Arquitetura de 3 camadas:** página fina (`src/pages`) → `src/features/<x>/` (constantes,
   mapper puro com teste, hook único de fetch) → componentes burros (`src/components/<x>/`).
