@@ -88,6 +88,18 @@ unidade no preço atual** (`margemUnitaria` → `calcularMargem`, a regra única
 - O hook lê só os campos do payload que o card usa (alias no select): o payload inteiro
   passa de 5 MB numa loja de 2.300 SKUs.
 - "Sincronizar com a Magalu" roda o `magalu-sync` `kind: skus`; rodada cortada pelo tempo é PARCIAL.
+## Produtos no formato do Gestor ML e da Shopee (29/10/2026)
+- `/produtos` tem as abas **Catálogo** (receita, contribuição e margem por SKU em 30 dias),
+  **Diagnóstico** (7 sinais do Gestor ML; sem os de visitas, que a Magalu não entrega) e
+  **Custos** (a tabela de custo por SKU e a importação em massa de antes, `pages/produtos/CustosAba.jsx`).
+- Fonte: `src/features/catalogo/` (`catalogo.mapper.js`, `diagnostico.mapper.js`, hook
+  `useCatalogoData`). A contribuição usa `calcularMargem` com `custoRealDoSku` (frete e
+  intermediação medidos), a mesma regra de Anúncios.
+- "Puxar custos da Precificação" chama `precificacao.sincronizar_loja('magalu', conta)`, que
+  grava em `magalu.sku_costs` o custo real do SKU. A rotina diária da Precificação
+  (`precificacao-sincronizar-lojas`, 07:20 UTC) faz o mesmo sozinha.
+- Componentes de render têm teste com `renderToString` (`catalogo.render.test.jsx`).
+
 
 ## Regras que valem aqui (as mesmas do Gestor ML)
 - **Arquitetura de 3 camadas:** página fina (`src/pages`) → `src/features/<x>/` (constantes,
