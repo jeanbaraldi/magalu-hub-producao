@@ -101,6 +101,28 @@ unidade no preço atual** (`margemUnitaria` → `calcularMargem`, a regra única
 - Componentes de render têm teste com `renderToString` (`catalogo.render.test.jsx`).
 
 
+## Atendimento: perguntas, SAC e conversas para o Hub (12/11/2026, publicado)
+Pedido do dono: a aba **Atendimento** do Hub precisa da Magalu na mesma fila de ML e Shopee.
+Este gestor só espelha e envia; a tela é a do Hub.
+- Migration `20261112120000_magalu_atendimento.sql`: `questions`, `tickets` (protocolos do SAC),
+  `ticket_messages`, `conversations`, `conversation_messages`, com leitura por papel e as policies da suíte.
+- Edge **`magalu-atendimento`** (`logic.ts` testado): `{cron:true}` ou `{account_id}` sincroniza;
+  `{acao:"responder", tipo:"pergunta"|"protocolo"|"conversa", id, account_id, texto}` envia.
+  Cron `magalu-atendimento-sync` a cada 5 min (`supabase/crons.sql`).
+- Medido em 12/11 com os tokens das 2 lojas: leitura de perguntas, protocolos e conversas
+  funciona (os escopos `:read` já estão no token). **Nenhum escopo de escrita está no token**:
+  responder devolve `sem_escopo` até liberar no app (ID Magalu) e reconectar as lojas.
+  Os nomes dos escopos de escrita (`ESCOPO_ESCRITA` em `logic.ts`) seguem o padrão dos de
+  leitura e não foram confirmados num token real.
+- ⚠️ Protocolos vêm com datas SEM fuso; gravadas como UTC (os prazos vêm redondos às 11:00 =
+  08:00 de Brasília). Status fora da spec aparece na prática (`waiting_product_posting`): é texto livre.
+- Só `waiting_seller` pede ação da loja; conversa aberta com a última mensagem do CUSTOMER idem.
+- Responder exige loja liberada e nível de escrita na Magalu pelo Hub (mesmo critério do ml-proxy).
+- **Publicado em 12/11/2026:** migration aplicada por SQL (registrada em `suite.migracoes`), edge
+  `magalu-atendimento` v1 (`verify_jwt=false`), cron `magalu-atendimento-sync` (jobid 344, URL e anon key
+  lidos do Vault, como os outros crons de produção). 1ª rodada: 1 pergunta e 1 protocolo aguardando,
+  105 conversas abertas (4 com o cliente por último), 824 mensagens; nenhuma parcial.
+
 ## Regras que valem aqui (as mesmas do Gestor ML)
 - **Arquitetura de 3 camadas:** página fina (`src/pages`) → `src/features/<x>/` (constantes,
   mapper puro com teste, hook único de fetch) → componentes burros (`src/components/<x>/`).
