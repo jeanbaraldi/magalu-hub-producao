@@ -101,7 +101,7 @@ unidade no preço atual** (`margemUnitaria` → `calcularMargem`, a regra única
 - Componentes de render têm teste com `renderToString` (`catalogo.render.test.jsx`).
 
 
-## Atendimento: perguntas, SAC e conversas para o Hub (12/11/2026, NÃO publicado)
+## Atendimento: perguntas, SAC e conversas para o Hub (12/11/2026, publicado)
 Pedido do dono: a aba **Atendimento** do Hub precisa da Magalu na mesma fila de ML e Shopee.
 Este gestor só espelha e envia; a tela é a do Hub.
 - Migration `20261112120000_magalu_atendimento.sql`: `questions`, `tickets` (protocolos do SAC),
@@ -118,8 +118,10 @@ Este gestor só espelha e envia; a tela é a do Hub.
   08:00 de Brasília). Status fora da spec aparece na prática (`waiting_product_posting`): é texto livre.
 - Só `waiting_seller` pede ação da loja; conversa aberta com a última mensagem do CUSTOMER idem.
 - Responder exige loja liberada e nível de escrita na Magalu pelo Hub (mesmo critério do ml-proxy).
-- ⚠️ **Ordem ao publicar:** (1) migration; (2) `supabase functions deploy magalu-atendimento --no-verify-jwt`;
-  (3) cron; (4) Hub.
+- **Publicado em 12/11/2026:** migration aplicada por SQL (registrada em `suite.migracoes`), edge
+  `magalu-atendimento` v1 (`verify_jwt=false`), cron `magalu-atendimento-sync` (jobid 344, URL e anon key
+  lidos do Vault, como os outros crons de produção). 1ª rodada: 1 pergunta e 1 protocolo aguardando,
+  105 conversas abertas (4 com o cliente por último), 824 mensagens; nenhuma parcial.
 
 ## Regras que valem aqui (as mesmas do Gestor ML)
 - **Arquitetura de 3 camadas:** página fina (`src/pages`) → `src/features/<x>/` (constantes,
