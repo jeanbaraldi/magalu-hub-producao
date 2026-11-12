@@ -56,3 +56,16 @@ select cron.schedule('magalu-sync-financeiro', '35 9 * * *', $$
     body := '{"cron": true, "kind": "financeiro", "days": 15}'::jsonb,
     timeout_milliseconds := 150000);
 $$);
+
+-- Atendimento (perguntas, SAC e conversas) para a aba Atendimento do Hub.
+select cron.unschedule(jobid) from cron.job where jobname = 'magalu-atendimento-sync';
+select cron.schedule('magalu-atendimento-sync', '*/5 * * * *', $$
+  select net.http_post(
+    url := '__SUPABASE_URL__/functions/v1/magalu-atendimento',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer __ANON_KEY__',
+      'x-cron-secret', (select value from magalu.app_config where key = 'CRON_SECRET')),
+    body := '{"cron": true}'::jsonb,
+    timeout_milliseconds := 150000);
+$$);

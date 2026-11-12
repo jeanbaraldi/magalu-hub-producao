@@ -15,3 +15,5 @@ max_rows = 1000
 verify_jwt = false
 [functions.magalu-sync]
 verify_jwt = false
+[functions.magalu-atendimento]
+verify_jwt = false
